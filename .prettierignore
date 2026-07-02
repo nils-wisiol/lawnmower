@@ -1,0 +1,7 @@
+dist
+node_modules
+playwright-report
+test-results
+
+# Design doc is hand-authored prose; don't let Prettier reflow it.
+lawnmower.md
