@@ -1,0 +1,96 @@
+// Core model types (M1). Geometry-agnostic by design: the game logic operates on
+// an abstract cell graph, so square-grid, hex, 8-way, and teleport all become
+// alternative Topology/Level data — not rewrites (see lawnmower.md §5).
+
+/**
+ * Opaque identifier for a cell. Never parse or order these in core logic; only
+ * the concrete Topology that minted them knows their internal structure. Keeping
+ * them opaque is what lets a hex grid or teleport edge drop in unchanged.
+ */
+export type CellId = string;
+
+/**
+ * A movement direction understood by a specific Topology (e.g. 'N'|'S'|'E'|'W'
+ * for a square grid, or six axial directions on a hex grid). Opaque to core logic.
+ */
+export type Direction = string;
+
+/**
+ * Abstract input intent produced by the input pipeline (arrow keys, swipes),
+ * before a Topology maps it onto one of its Directions. This indirection is why
+ * hex + swipe mapping (lawnmower.md §10) can be solved without touching core rules.
+ */
+export type InputDirection = 'up' | 'down' | 'left' | 'right';
+
+/**
+ * The two orthogonal traits of a cell (lawnmower.md §2). Deliberately NOT a single
+ * `grass | obstacle` enum: movement reads `passable`, the win condition counts
+ * `mowable`, and the revisit fail fires only on `mowable`. New tile kinds
+ * (passable-but-not-mowable, etc.) are therefore data, not logic changes.
+ */
+export interface CellTraits {
+  /** Can the mower enter this cell? */
+  readonly passable: boolean;
+  /** Does this cell count toward the objective, and does re-entering it fail? */
+  readonly mowable: boolean;
+}
+
+/** Pixel-space position of a cell, in cell units (renderer scales). For M2 rendering. */
+export interface CellPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * The central abstraction (lawnmower.md §5): cells, adjacency, a direction set,
+ * cell→pixel layout, and input mapping. Square grid and hex grid are two
+ * implementations of this one interface.
+ *
+ * Adjacency is NOT assumed to be geometric: `neighbor` may return any cell,
+ * including a non-adjacent one, which is exactly how teleport edges are expressed.
+ */
+export interface Topology {
+  /** Every cell in this board. */
+  readonly cells: readonly CellId[];
+  /** The directions the mower may attempt to move in. */
+  readonly directions: readonly Direction[];
+  /**
+   * The neighbor reached by moving from `cell` in `direction`, or undefined if
+   * there is none (board edge). May return a non-geometrically-adjacent cell.
+   */
+  neighbor(cell: CellId, direction: Direction): CellId | undefined;
+  /** Map an abstract input intent onto a direction, or undefined if unmapped. */
+  directionForInput(input: InputDirection): Direction | undefined;
+  /** Pixel-space layout of a cell, for rendering. */
+  layout(cell: CellId): CellPoint;
+}
+
+/**
+ * A fully-specified level (lawnmower.md §5 "long form"): the board topology, the
+ * traits of every cell, and a fixed start. Short-form seeds expand into this.
+ */
+export interface Level {
+  readonly topology: Topology;
+  /** Traits for every cell in `topology.cells`. */
+  readonly traits: ReadonlyMap<CellId, CellTraits>;
+  /** Fixed starting cell of the mower. Must be passable. */
+  readonly start: CellId;
+}
+
+/** Look up a cell's traits, throwing if the level is missing an entry for it. */
+export function traitsOf(level: Level, cell: CellId): CellTraits {
+  const t = level.traits.get(cell);
+  if (t === undefined) {
+    throw new Error(`Level has no traits for cell "${cell}"`);
+  }
+  return t;
+}
+
+/** Count the cells that count toward the objective (the mowable ones). */
+export function countMowable(level: Level): number {
+  let n = 0;
+  for (const cell of level.topology.cells) {
+    if (traitsOf(level, cell).mowable) n++;
+  }
+  return n;
+}
