@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { attachKeyboard, inputForKey, isRestartKey } from '../../../src/input/keyboard.ts';
+import {
+  attachKeyboard,
+  inputForKey,
+  isAdvanceKey,
+  isRestartKey,
+} from '../../../src/input/keyboard.ts';
 
 describe('inputForKey', () => {
   it('maps arrow keys and WASD to the four intents', () => {
@@ -20,12 +25,23 @@ describe('inputForKey', () => {
 });
 
 describe('isRestartKey', () => {
-  it('recognises R / Enter / Space', () => {
+  it('recognises only R (retry the same level), not the advance keys', () => {
     expect(isRestartKey('r')).toBe(true);
     expect(isRestartKey('R')).toBe(true);
-    expect(isRestartKey('Enter')).toBe(true);
-    expect(isRestartKey(' ')).toBe(true);
+    expect(isRestartKey('Enter')).toBe(false);
+    expect(isRestartKey(' ')).toBe(false);
     expect(isRestartKey('q')).toBe(false);
+  });
+});
+
+describe('isAdvanceKey', () => {
+  it('recognises Enter / Space / N (continue — next level or retry)', () => {
+    expect(isAdvanceKey('Enter')).toBe(true);
+    expect(isAdvanceKey(' ')).toBe(true);
+    expect(isAdvanceKey('n')).toBe(true);
+    expect(isAdvanceKey('N')).toBe(true);
+    expect(isAdvanceKey('r')).toBe(false);
+    expect(isAdvanceKey('q')).toBe(false);
   });
 });
 
@@ -71,5 +87,22 @@ describe('attachKeyboard', () => {
 
     detach();
     expect(target.attached).toBe(false);
+  });
+
+  it('routes advance keys to onAdvance without touching onRestart', () => {
+    const target = fakeTarget();
+    const onRestart = vi.fn();
+    const onAdvance = vi.fn();
+    attachKeyboard(target as unknown as HTMLElement, {
+      onMove: vi.fn(),
+      onRestart,
+      onAdvance,
+    });
+
+    target.fire({ key: 'Enter', repeat: false });
+    target.fire({ key: 'n', repeat: false });
+
+    expect(onAdvance).toHaveBeenCalledTimes(2);
+    expect(onRestart).not.toHaveBeenCalled();
   });
 });

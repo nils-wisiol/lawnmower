@@ -4,10 +4,11 @@
 // environment does nothing.
 
 import { mountGame } from './game/app.ts';
-import { defaultLevel } from './game/defaultLevel.ts';
+import { defaultLevel, nextLevel } from './game/defaultLevel.ts';
 
 export function bootstrap(container: HTMLElement): void {
-  mountGame(container, defaultLevel());
+  // Boot the deterministic default level; each win hands out a fresh random one.
+  mountGame(container, defaultLevel(), { nextLevel });
 }
 
 if (typeof document !== 'undefined') {

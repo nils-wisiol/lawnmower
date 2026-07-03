@@ -66,6 +66,32 @@ export interface Topology {
 }
 
 /**
+ * When a level's wall-clock timer begins (lawnmower.md §2). Default is `firstMove`
+ * so planning before the first move is free; a level may override to `load` to
+ * start the clock the instant it appears.
+ */
+export type TimerStart = 'firstMove' | 'load';
+
+/**
+ * Per-level scoring/timing config (lawnmower.md §2). Optional on a Level; absent
+ * fields fall back to DEFAULT_LEVEL_CONFIG. Kept as data on the level so the
+ * generator and hand-authored maps can each set it without touching game logic.
+ */
+export interface LevelConfig {
+  /** When the timer starts. Defaults to `firstMove`. */
+  readonly timerStart: TimerStart;
+  /**
+   * Optional time limit in milliseconds; exceeding it is a hard fail (§2). Absent
+   * = untimed (score is completion time only). Time-limit *sourcing* is an open
+   * question (§10), so the generator leaves this unset for now.
+   */
+  readonly timeLimitMs?: number;
+}
+
+/** Config used when a Level omits its own: free planning time, no time limit. */
+export const DEFAULT_LEVEL_CONFIG: LevelConfig = { timerStart: 'firstMove' };
+
+/**
  * A fully-specified level (lawnmower.md §5 "long form"): the board topology, the
  * traits of every cell, and a fixed start. Short-form seeds expand into this.
  */
@@ -75,6 +101,13 @@ export interface Level {
   readonly traits: ReadonlyMap<CellId, CellTraits>;
   /** Fixed starting cell of the mower. Must be passable. */
   readonly start: CellId;
+  /** Optional scoring/timing config; see levelConfig() for the resolved value. */
+  readonly config?: LevelConfig;
+}
+
+/** Resolve a level's timing config, filling in defaults for an absent one. */
+export function levelConfig(level: Level): LevelConfig {
+  return level.config ?? DEFAULT_LEVEL_CONFIG;
 }
 
 /** Look up a cell's traits, throwing if the level is missing an entry for it. */

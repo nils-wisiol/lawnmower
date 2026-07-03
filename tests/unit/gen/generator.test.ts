@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   countMowable,
   createGame,
+  levelConfig,
   move,
   traitsOf,
   type CellId,
@@ -101,6 +102,19 @@ describe('generate — coverage floor', () => {
     const { level, coverage } = generate(BASE);
     const total = level.topology.cells.length;
     expect(coverage).toBeCloseTo(countMowable(level) / total);
+  });
+});
+
+describe('generate — time limit', () => {
+  it('budgets 0.5s per move of the perfect mow (walk length - 1 steps)', () => {
+    const { level, walk } = generate(BASE);
+    // The start is mowed for free, so the solution is walk.length - 1 moves.
+    expect(levelConfig(level).timeLimitMs).toBe((walk.length - 1) * 500);
+  });
+
+  it('starts the clock on the first move (free planning time)', () => {
+    const { level } = generate(BASE);
+    expect(levelConfig(level).timerStart).toBe('firstMove');
   });
 });
 

@@ -7,6 +7,13 @@ import { countMowable, traitsOf, type CellId, type InputDirection, type Level } 
 export type GameStatus = 'playing' | 'won' | 'lost';
 
 /**
+ * Why a lost run ended: a re-mow `crash`, or the time limit running out (`timeout`,
+ * lawnmower.md §2). Lives beside GameStatus so both the timing session and the
+ * renderer can name it without depending on each other.
+ */
+export type FailReason = 'crash' | 'timeout';
+
+/**
  * Immutable snapshot of a game in progress. `move` returns a fresh state rather
  * than mutating, keeping the core trivially testable and replayable.
  */
@@ -114,6 +121,15 @@ export function move(state: GameState, input: InputDirection): MoveResult {
     },
     outcome: won ? 'won' : 'moved',
   };
+}
+
+/**
+ * Force a running game into a loss without a move. Used for the time-limit fail
+ * (lawnmower.md §2), which is clock-driven rather than move-driven — so it lives
+ * outside `move`. No-op once the game is already finished.
+ */
+export function fail(state: GameState): GameState {
+  return state.status === 'playing' ? { ...state, status: 'lost' } : state;
 }
 
 /** Cells still needing to be mowed. Empty iff the level is won. */

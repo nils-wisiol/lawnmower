@@ -8,9 +8,13 @@ export type {
   Direction,
   InputDirection,
   Level,
+  LevelConfig,
+  TimerStart,
   Topology,
 } from './types.ts';
-export { countMowable, traitsOf } from './types.ts';
+export { countMowable, traitsOf, levelConfig, DEFAULT_LEVEL_CONFIG } from './types.ts';
+
+export { Stopwatch, systemClock, formatTime, type Clock } from './timing.ts';
 
 export {
   SquareGrid,
@@ -23,7 +27,9 @@ export {
 export {
   createGame,
   move,
+  fail,
   remainingMowable,
+  type FailReason,
   type GameState,
   type GameStatus,
   type MoveOutcome,

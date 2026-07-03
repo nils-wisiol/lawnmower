@@ -3,8 +3,8 @@
 // square grid, so a hex/teleport Topology renders through this same code. Every
 // color comes from the injected Theme; there are no palette constants here.
 
-import { traitsOf, type CellId, type CellTraits, type Level } from '../model/index.ts';
-import type { GameState } from '../model/index.ts';
+import { formatTime, traitsOf, type CellId, type CellTraits, type Level } from '../model/index.ts';
+import type { FailReason, GameState } from '../model/index.ts';
 import type { Theme } from './theme.ts';
 
 export interface RendererOptions {
@@ -13,6 +13,21 @@ export interface RendererOptions {
   /** Gap between cells (drawn as grid lines), in CSS pixels. */
   readonly gap?: number;
 }
+
+/** Timing/scoring overlay data the board draws on top of the level (M4). */
+export interface RenderHud {
+  /** Wall-clock time on the mower's run, in ms (the score). */
+  readonly elapsedMs: number;
+  /** Level time limit in ms, if any; shown alongside the clock. */
+  readonly timeLimitMs?: number;
+  /** Time left before the limit fail, if timed; drives the danger tint. */
+  readonly remainingMs?: number;
+  /** On a loss, why — so the end screen can distinguish a crash from a timeout. */
+  readonly failReason?: FailReason;
+}
+
+/** Below this much time left, the HUD clock turns to the danger colour. */
+const DANGER_THRESHOLD_MS = 5000;
 
 const DEFAULT_CELL_SIZE = 48;
 const DEFAULT_GAP = 2;
@@ -92,8 +107,8 @@ export class CanvasRenderer {
     };
   }
 
-  /** Redraw the entire board for the given state. */
-  render(state: GameState): void {
+  /** Redraw the entire board for the given state, plus the optional timing HUD. */
+  render(state: GameState, hud?: RenderHud): void {
     const { ctx, cellSize, gap, theme, level } = this;
 
     ctx.fillStyle = theme.background;
@@ -118,8 +133,11 @@ export class CanvasRenderer {
     // The mower, on top of everything.
     this.drawMower(state.position);
 
+    // HUD timer sits above the board but below the end overlay's scrim.
+    if (hud) this.drawTimer(hud);
+
     if (state.status !== 'playing') {
-      this.drawEndOverlay(state.status);
+      this.drawEndOverlay(state.status, hud);
     }
   }
 
@@ -156,7 +174,22 @@ export class CanvasRenderer {
     ctx.fillRect(px + inset, py + inset, size, size * 0.32);
   }
 
-  private drawEndOverlay(status: 'won' | 'lost'): void {
+  /** Top-left clock readout: elapsed time, plus the limit and a danger tint if timed. */
+  private drawTimer(hud: RenderHud): void {
+    const { ctx, theme, cellSize } = this;
+    const danger = hud.remainingMs !== undefined && hud.remainingMs <= DANGER_THRESHOLD_MS;
+    let text = formatTime(hud.elapsedMs);
+    if (hud.timeLimitMs !== undefined) text += ` / ${formatTime(hud.timeLimitMs)}`;
+
+    const pad = Math.round(cellSize * 0.18);
+    ctx.fillStyle = danger ? theme.hudDanger : theme.hudText;
+    ctx.font = `bold ${Math.round(cellSize * 0.34)}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(text, pad, pad);
+  }
+
+  private drawEndOverlay(status: 'won' | 'lost', hud?: RenderHud): void {
     const { ctx, theme } = this;
     const w = this.canvas.clientWidth || this.canvas.width;
     const h = this.canvas.clientHeight || this.canvas.height;
@@ -164,10 +197,25 @@ export class CanvasRenderer {
     ctx.fillStyle = theme.overlayScrim;
     ctx.fillRect(0, 0, w, h);
 
-    ctx.fillStyle = status === 'won' ? theme.winText : theme.loseText;
-    ctx.font = `bold ${Math.round(this.cellSize * 0.6)}px system-ui, sans-serif`;
+    const won = status === 'won';
+    const timedOut = hud?.failReason === 'timeout';
+    const title = won ? 'You won!' : timedOut ? "Time's up!" : 'You crashed!';
+    // Winners see their score; losers see why (the crash cell is also highlighted).
+    const subtitle = won
+      ? formatTime(hud?.elapsedMs ?? 0)
+      : timedOut
+        ? 'Out of time'
+        : 'Re-mowed a tile';
+
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(status === 'won' ? 'You won!' : 'You crashed!', w / 2, h / 2);
+
+    ctx.fillStyle = won ? theme.winText : theme.loseText;
+    ctx.font = `bold ${Math.round(this.cellSize * 0.6)}px system-ui, sans-serif`;
+    ctx.fillText(title, w / 2, h / 2 - this.cellSize * 0.35);
+
+    ctx.fillStyle = theme.hudText;
+    ctx.font = `${Math.round(this.cellSize * 0.36)}px system-ui, sans-serif`;
+    ctx.fillText(subtitle, w / 2, h / 2 + this.cellSize * 0.35);
   }
 }

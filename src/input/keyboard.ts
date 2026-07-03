@@ -30,14 +30,25 @@ export function inputForKey(key: string): InputDirection | undefined {
   }
 }
 
-/** Keys that restart the level (used from the win/fail state — instant retry, §4). */
+/** Keys that restart the *same* level (instant retry from any end state — §4). */
 export function isRestartKey(key: string): boolean {
-  return key === 'r' || key === 'R' || key === 'Enter' || key === ' ';
+  return key === 'r' || key === 'R';
+}
+
+/**
+ * Keys that continue past a finished run: the next level after a win, or a retry
+ * after a loss (the app decides which). Enter/Space are the natural "continue"
+ * keys; N is a mnemonic for "next".
+ */
+export function isAdvanceKey(key: string): boolean {
+  return key === 'Enter' || key === ' ' || key === 'n' || key === 'N';
 }
 
 export interface KeyboardHandlers {
   onMove(input: InputDirection): void;
   onRestart(): void;
+  /** Optional: continue past a finished run (next level / retry). */
+  onAdvance?(): void;
 }
 
 /**
@@ -60,6 +71,11 @@ export function attachKeyboard(
     if (isRestartKey(event.key)) {
       event.preventDefault();
       handlers.onRestart();
+      return;
+    }
+    if (isAdvanceKey(event.key) && handlers.onAdvance) {
+      event.preventDefault();
+      handlers.onAdvance();
     }
   };
 

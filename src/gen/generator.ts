@@ -74,6 +74,14 @@ const SCATTER_DENSITY = 0.05;
  */
 const RANDOM_STEP_PROBABILITY = 0.15;
 
+/**
+ * Default time budget per step of the perfect mow (lawnmower.md §2 time limit). The
+ * generated level's limit scales with its solution length — a bigger lawn gets
+ * proportionally more time — at half a second per move the player must make. Time-
+ * limit *sourcing* is an open question (§10); this per-step scaling is the first cut.
+ */
+const MS_PER_STEP = 500;
+
 /** Neighbours of `cell` that are neither blocked (obstacle) nor already visited. */
 function openNeighbours(
   topology: Topology,
@@ -207,7 +215,15 @@ export function generate(config: GeneratorConfig): GeneratedLevel {
     traits.set(cell, walked.has(cell) ? GRASS : OBSTACLE);
   }
 
-  const level: Level = { topology, traits, start: bestWalk[0] };
+  // Time limit scales with the solution: the perfect mow takes bestWalk.length - 1
+  // moves (the start is mowed for free), budgeted at MS_PER_STEP each.
+  const steps = bestWalk.length - 1;
+  const level: Level = {
+    topology,
+    traits,
+    start: bestWalk[0],
+    config: { timerStart: 'firstMove', timeLimitMs: steps * MS_PER_STEP },
+  };
   return { level, walk: bestWalk, coverage };
 }
 

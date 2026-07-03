@@ -32,6 +32,11 @@ export interface Theme {
   readonly mowerBody: string;
   readonly mowerAccent: string;
 
+  /** On-board timer readout (the HUD clock). */
+  readonly hudText: string;
+  /** Timer readout when the level's time limit is nearly up (warning tint). */
+  readonly hudDanger: string;
+
   /** Dimming scrim drawn over the board on win/fail. */
   readonly overlayScrim: string;
   readonly winText: string;
@@ -58,6 +63,9 @@ export const gardenTheme: Theme = {
   startMarker: '#f2e9c9',
   mowerBody: '#d94c3d',
   mowerAccent: '#f2e9c9',
+
+  hudText: '#eaf6c9',
+  hudDanger: '#f2b3ab',
 
   overlayScrim: 'rgba(10, 16, 8, 0.66)',
   winText: '#eaf6c9',
