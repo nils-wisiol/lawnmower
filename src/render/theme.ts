@@ -1,8 +1,28 @@
 // Theme layer (lawnmower.md §3/§5): rendering pulls every color/sprite through a
 // swappable Theme so a full reskin is an asset/data swap, not a code change. Keep
-// NO color constants hardcoded in the renderer — they all live here. M2 ships a
-// single placeholder garden theme; M6 replaces it with real pixel-art assets
-// through this same interface, with no renderer/logic changes.
+// NO color constants hardcoded in the renderer — they all live here. M2 shipped
+// flat placeholder colors; M6 adds the pixel-art `sprites` set (grass, water,
+// flowers, trees, the directional mower) drawn on top of them, through this same
+// interface with no renderer/logic changes. The colors remain as the base fill
+// under each sprite (and drive the HUD/overlay/text, which stay flat).
+
+import { gardenSprites } from './gardenSprites.ts';
+import type { Sprite } from './sprite.ts';
+import type { InputDirection } from '../model/index.ts';
+
+/** The pixel-art assets a theme draws over its base fills (lawnmower.md §3). */
+export interface ThemeSprites {
+  /** Uncut grass variants, picked per-cell for texture variety. */
+  readonly grassUnmowed: readonly Sprite[];
+  /** Freshly-mown lawn (the visible trail). */
+  readonly grassMowed: Sprite;
+  /** Passable-but-not-mowable path (forward-compat tile). */
+  readonly path: Sprite;
+  /** Obstacle variants (lake/flower/tree), picked per-cell from the impassable trait. */
+  readonly obstacles: readonly Sprite[];
+  /** The mower, one sprite per heading so it faces the way it last moved. */
+  readonly mower: Record<InputDirection, Sprite>;
+}
 
 /**
  * Everything the renderer needs to draw a level. Colors are chosen per *trait
@@ -32,6 +52,12 @@ export interface Theme {
   readonly mowerBody: string;
   readonly mowerAccent: string;
 
+  /** Faint marker on cells the mower can legally enter next (move affordance, §3). */
+  readonly affordance: string;
+
+  /** Pixel-art assets drawn over the base fills (§3). */
+  readonly sprites: ThemeSprites;
+
   /** On-board timer readout (the HUD clock). */
   readonly hudText: string;
   /** Timer readout when the level's time limit is nearly up (warning tint). */
@@ -46,9 +72,9 @@ export interface Theme {
 }
 
 /**
- * v1's single garden theme. Deliberately flat placeholder colors that already
- * read as a garden (green lawn, blue-grey water/obstacles, sandy path). MI2-style
- * pixel art (§3) slots in later behind the same interface.
+ * v1's single garden theme. Flat base colors (which already read as a garden:
+ * green lawn, blue water, sandy path) with the M6 pixel-art `sprites` layered on
+ * top. The base fill shows through any sprite transparency and behind the mower.
  */
 export const gardenTheme: Theme = {
   name: 'garden',
@@ -59,12 +85,15 @@ export const gardenTheme: Theme = {
   // the bright, pale-green of just-cut lawn — so the mown trail lightens as you go.
   grassUnmowed: '#3c6b2a',
   grassMowed: '#5a9e3f',
-  obstacle: '#3f5a74',
+  obstacle: '#3f6f9e',
   path: '#c8b071',
 
   startMarker: '#f2e9c9',
   mowerBody: '#d94c3d',
   mowerAccent: '#f2e9c9',
+
+  affordance: '#eaf6c9',
+  sprites: gardenSprites,
 
   hudText: '#eaf6c9',
   hudDanger: '#f2b3ab',

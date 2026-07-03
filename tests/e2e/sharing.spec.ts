@@ -19,6 +19,18 @@ const ARROW: Record<InputDirection, string> = {
 // The default level's generator walk proves it solvable; we replay it to win.
 const { level, walk } = generate(decodeShortForm(DEFAULT_LEVEL_CODE));
 
+// These exercise the generated-default boot (i.e. a returning visitor). A first-ever
+// visit would open the M6 tutorial instead, so mark it seen before each test.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('lawnmower:v1:tutorial-seen', '1');
+    } catch {
+      /* ignore */
+    }
+  });
+});
+
 // The no-hash boot level is sized to the viewport (its dimensions follow the
 // screen), so its code isn't the fixed DEFAULT_LEVEL_CODE. Derive the expected
 // code from the page's own viewport, exactly as the app does, so the assertion

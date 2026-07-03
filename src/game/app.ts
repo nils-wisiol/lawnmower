@@ -9,17 +9,35 @@
 
 import { attachKeyboard } from '../input/keyboard.ts';
 import { attachSwipe } from '../input/swipe.ts';
-import { formatTime, systemClock, type Clock, type Level } from '../model/index.ts';
-import { CanvasRenderer, type RenderHud, type RendererOptions } from '../render/canvasRenderer.ts';
+import {
+  formatTime,
+  systemClock,
+  type Clock,
+  type InputDirection,
+  type Level,
+} from '../model/index.ts';
+import {
+  CanvasRenderer,
+  type RenderAnim,
+  type RenderHud,
+  type RendererOptions,
+} from '../render/canvasRenderer.ts';
 import { gardenTheme, type Theme } from '../render/theme.ts';
 import { createControls } from './controls.ts';
 import { levelFromCode, type CodedLevel } from './defaultLevel.ts';
 import { pushLevelHash, readLevelCode, syncLevelHash, type HistoryLike } from './levelUrl.ts';
 import { GameSession } from './session.ts';
 import { browserStore, type LevelStore } from './storage.ts';
+import type { CoachConfig } from './tutorial.ts';
 
 /** Breathing room (CSS px) kept between the board and the viewport edges. */
 const BOARD_MARGIN = 16;
+
+// Juice timings (M6). The mower slides between cells and a just-mown tile pops; the
+// pop lingers a touch past the slide. Both are visual only — the model is instant —
+// and both collapse to 0 (snap) under prefers-reduced-motion (§4 accessibility).
+const SLIDE_MS = 90;
+const POP_MS = 200;
 
 export interface GameAppOptions {
   readonly theme?: Theme;
@@ -32,6 +50,8 @@ export interface GameAppOptions {
   readonly history?: HistoryLike;
   /** Persistence for best times / seed history; defaults to localStorage-backed. */
   readonly store?: LevelStore;
+  /** Onboarding coach shown while its `code` is the loaded level (M6). */
+  readonly coach?: CoachConfig;
 }
 
 export interface GameApp {
@@ -111,10 +131,37 @@ export function mountGame(
   });
   container.appendChild(controls.element);
 
+  // Onboarding coach (M6): a small card shown only while its configured level (the
+  // tutorial) is the one loaded, so it teaches on the first lawn and disappears once
+  // the player moves on to generated lawns. Sits above the seed controls.
+  const coachEl = options.coach ? document.createElement('div') : undefined;
+  if (coachEl) {
+    coachEl.className = 'coach';
+    container.insertBefore(coachEl, controls.element);
+  }
+
   // The app owns the level-to-level flow (see replaySame / loadNextLawn below) so
   // the URL/code bookkeeping happens in one place; the session just plays whatever
   // level it is handed.
   const session = new GameSession(initial.level, { clock });
+
+  // Facing + in-flight animation for the M6 juice, tracked here (never in the model,
+  // which stays instant). `facing` persists between moves so the idle mower keeps its
+  // last heading; `anim` is the current slide/pop, retired by the frame loop.
+  let facing: InputDirection = 'right';
+  let anim:
+    | { from: string; to: string; facing: InputDirection; popCell?: string; start: number }
+    | undefined;
+  const reducedMotion =
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false;
+  const slideMs = reducedMotion ? 0 : SLIDE_MS;
+  const popMs = reducedMotion ? 0 : POP_MS;
+  const animMs = Math.max(slideMs, popMs);
+  const animNow = (): number =>
+    typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const easeOut = (t: number): number => 1 - (1 - t) * (1 - t);
 
   // The board never grows wider than the viewport (minus a small margin) so it
   // fits narrow phone screens; an explicit maxWidth in options.renderer (tests)
@@ -139,13 +186,47 @@ export function mountGame(
     failReason: session.failReason,
   });
 
+  /** The current frame's visual animation: mower slide + fresh-mow pop, or just facing. */
+  const renderAnim = (): RenderAnim => {
+    if (anim === undefined) return { facing };
+    const elapsed = animNow() - anim.start;
+    const slideT = slideMs <= 0 ? 1 : Math.min(1, elapsed / slideMs);
+    const popT = popMs <= 0 ? 1 : Math.min(1, elapsed / popMs);
+    return {
+      facing,
+      mower:
+        slideT < 1
+          ? { from: anim.from, to: anim.to, t: easeOut(slideT), facing: anim.facing }
+          : undefined,
+      pop: anim.popCell !== undefined && popT < 1 ? { cell: anim.popCell, t: popT } : undefined,
+    };
+  };
+
+  /** Show/refresh the onboarding coach, but only while its level is the one loaded. */
+  const updateCoach = (): void => {
+    const coach = options.coach;
+    if (coachEl === undefined || coach === undefined) return;
+    const show = currentCode === coach.code;
+    coachEl.hidden = !show;
+    if (!show) return;
+    coachEl.textContent =
+      session.status === 'won'
+        ? coach.messages.won
+        : session.status === 'lost'
+          ? coach.messages.lost
+          : session.state.mowed.size <= 1
+            ? coach.messages.start
+            : coach.messages.progress;
+  };
+
   const draw = (): void => {
     if (session.level !== renderedLevel) {
       renderer = makeRenderer(session.level);
       renderedLevel = session.level;
     }
-    renderer.render(session.state, hud());
+    renderer.render(session.state, hud(), renderAnim());
     statusEl.textContent = statusText(session, win);
+    updateCoach();
     container.dataset.status = session.status;
   };
 
@@ -233,7 +314,17 @@ export function mountGame(
 
   const doMove = (input: Parameters<GameSession['move']>[0]): void => {
     if (session.status !== 'playing') return;
-    session.move(input);
+    const from = session.state.position;
+    const mowedBefore = session.state.mowed.size;
+    const outcome = session.move(input);
+    // Any non-blocked outcome moved the mower (a crash still slides into the fatal
+    // cell); pop the destination only when this move freshly cut a tile.
+    if (outcome !== 'blocked') {
+      facing = input;
+      const to = session.state.position;
+      const freshlyMown = session.state.mowed.size > mowedBefore;
+      anim = { from, to, facing: input, popCell: freshlyMown ? to : undefined, start: animNow() };
+    }
     recordWin();
     draw();
   };
@@ -279,10 +370,20 @@ export function mountGame(
   const hasRaf = typeof requestAnimationFrame === 'function';
   let frame = 0;
   const tick = (): void => {
+    // Retire a finished animation, forcing one last frame so the mower settles on
+    // its cell even after a win/loss (when the clock loop below is paused).
+    let settled = false;
+    if (anim !== undefined && animNow() - anim.start >= animMs) {
+      anim = undefined;
+      settled = true;
+    }
     // Only playing runs change over time; when playing, tick may time us out, and
     // the redraw then shows either the live clock or the just-triggered end screen.
+    // When not playing, redraw only while an animation is still running (or settling).
     if (session.status === 'playing') {
       session.tick();
+      draw();
+    } else if (anim !== undefined || settled) {
       draw();
     }
     frame = requestAnimationFrame(tick);

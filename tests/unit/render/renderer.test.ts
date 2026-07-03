@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { cellFill, fitCellSize } from '../../../src/render/canvasRenderer.ts';
+import {
+  cellFill,
+  fitCellSize,
+  legalNeighbors,
+  spriteForCell,
+} from '../../../src/render/canvasRenderer.ts';
 import { gardenTheme } from '../../../src/render/theme.ts';
+import { createGame, levelFromAscii, move } from '../../../src/model/index.ts';
 
 // The renderer colours a cell from its *traits* + mow state (mirroring the
 // trait-based model), never a tile-name enum. This locks that mapping so a new
@@ -30,6 +36,61 @@ describe('cellFill (trait-driven colouring)', () => {
   // darker/overgrown one. Locked so the two aren't accidentally swapped back.
   it('mowed grass reads brighter than unmowed grass', () => {
     expect(luminance(t.grassMowed)).toBeGreaterThan(luminance(t.grassUnmowed));
+  });
+});
+
+// The sprite chosen for a cell mirrors cellFill: driven by traits + mow state, and
+// stable per-cell (so a lawn doesn't shimmer between redraws). This locks the
+// trait→sprite mapping and the determinism of the per-cell variety.
+describe('spriteForCell (trait-driven pixel art)', () => {
+  const t = gardenTheme;
+  const cell = '2,3';
+
+  it('obstacles draw an obstacle-variant sprite', () => {
+    const s = spriteForCell(t, { passable: false, mowable: false }, false, cell);
+    expect(t.sprites.obstacles).toContain(s);
+  });
+
+  it('passable-but-not-mowable draws the path sprite', () => {
+    expect(spriteForCell(t, { passable: true, mowable: false }, false, cell)).toBe(t.sprites.path);
+  });
+
+  it('mowed vs unmowed grass draw different sprites (the visible trail)', () => {
+    const unmowed = spriteForCell(t, { passable: true, mowable: true }, false, cell);
+    const mowed = spriteForCell(t, { passable: true, mowable: true }, true, cell);
+    expect(mowed).toBe(t.sprites.grassMowed);
+    expect(t.sprites.grassUnmowed).toContain(unmowed);
+    expect(mowed).not.toBe(unmowed);
+  });
+
+  it('picks the same variant for a cell every time (no shimmer)', () => {
+    const a = spriteForCell(t, { passable: false, mowable: false }, false, cell);
+    const b = spriteForCell(t, { passable: false, mowable: false }, false, cell);
+    expect(a).toBe(b);
+  });
+});
+
+// The move-affordance hints (and the crash rule they encode): the mower may step to
+// a passable neighbour, but never back onto an already-mown tile — that's the fail.
+describe('legalNeighbors (move affordances)', () => {
+  it('lists passable neighbours and excludes the just-mown cell behind the mower', () => {
+    // A 1x3 strip: start at the left, one step right mows the middle.
+    const level = levelFromAscii('S..');
+    const start = createGame(level);
+    const afterRight = move(start, 'right').state;
+
+    // From the middle cell, left leads back onto the mown start (a crash) — excluded;
+    // right leads to fresh grass — included.
+    const legal = legalNeighbors(level, afterRight);
+    expect(legal).toContain(level.topology.neighbor(afterRight.position, 'E'));
+    expect(legal).not.toContain(level.start);
+  });
+
+  it('is empty once the game is no longer playing', () => {
+    const level = levelFromAscii('S.');
+    const won = move(createGame(level), 'right').state; // mows the last tile → won
+    expect(won.status).toBe('won');
+    expect(legalNeighbors(level, won)).toEqual([]);
   });
 });
 

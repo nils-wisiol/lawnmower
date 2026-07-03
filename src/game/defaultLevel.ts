@@ -7,6 +7,7 @@
 
 import { DEMO_LEVEL_MAP } from './demoLevel.ts';
 import { readLevelCode } from './levelUrl.ts';
+import { TUTORIAL_CODE, tutorialLevel } from './tutorial.ts';
 import { encodeShortForm, levelFromShortForm } from '../gen/index.ts';
 import { levelFromAscii, type Level } from '../model/index.ts';
 
@@ -101,11 +102,14 @@ export function defaultCodedLevel(size: LevelSize = DEFAULT_SIZE): CodedLevel {
 }
 
 /**
- * Expand a short-form code into a coded level. A malformed or unsupported-version
- * code (e.g. a link from a future generator) falls back to the default level rather
- * than throwing — a broken share link still lands the player in a playable game.
+ * Expand a level code into a coded level. The reserved `tutorial` code resolves to
+ * the onboarding lawn (so #tutorial links and pasting `tutorial` both work); every
+ * other code is a generator short form. A malformed or unsupported-version code
+ * (e.g. a link from a future generator) falls back to the default level rather than
+ * throwing — a broken share link still lands the player in a playable game.
  */
 export function levelFromCode(code: string): CodedLevel {
+  if (code === TUTORIAL_CODE) return tutorialLevel();
   try {
     return { level: levelFromShortForm(code), code };
   } catch {

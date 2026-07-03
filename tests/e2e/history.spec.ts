@@ -1,5 +1,17 @@
 import { expect, test } from '@playwright/test';
 
+// Boot straight onto generated lawns (returning visitor); a first-ever visit would
+// open the M6 tutorial, which would just be an extra history entry to reason about.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('lawnmower:v1:tutorial-seen', '1');
+    } catch {
+      /* ignore */
+    }
+  });
+});
+
 // Moving to a new lawn pushes a browser-history entry, so the player can press
 // Back to return to a previous lawn (and Forward to come back). Each level change
 // is a real navigation, not an in-place URL rewrite.
