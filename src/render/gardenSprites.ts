@@ -137,7 +137,15 @@ const tree = overlay(grassTile(4), [
   '................',
 ], { m: '#4c8236', M: '#356024', t: '#6b4a2a' });
 
-const obstacles: readonly Sprite[] = [lakeTile(), flower, tree];
+// Water/tree/flower are exposed as named sets so the renderer can map a cell's
+// decor (lawnmower.md §3) to the right art, rather than picking blindly by hash.
+const water = lakeTile();
+const trees: readonly Sprite[] = [tree];
+const flowers: readonly Sprite[] = [flower];
+
+// Fallback pool for obstacle cells that carry no decor (hand-authored/ascii levels):
+// the old blind per-cell hash pick, preserving their original look.
+const obstacles: readonly Sprite[] = [water, flower, tree];
 
 // --- Mower (authored facing up, rotated for the other three headings) -------
 // prettier-ignore
@@ -176,6 +184,9 @@ export const gardenSprites = {
   grassUnmowed,
   grassMowed,
   path,
+  water,
+  trees,
+  flowers,
   obstacles,
   mower,
 } as const;

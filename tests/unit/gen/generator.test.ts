@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   countMowable,
   createGame,
+  decorOf,
   levelConfig,
   move,
   traitsOf,
@@ -87,6 +88,98 @@ describe('generate — gaps become obstacles', () => {
     // Grass cells are exactly the walked cells.
     const grass = level.topology.cells.filter((c) => traitsOf(level, c).mowable);
     expect(grass.length).toBe(walk.length);
+  });
+});
+
+// Water should read as real ponds — connected bodies — not a uniform sprinkle of
+// single tiles across the obstacles. The generator clusters it; these lock that in.
+describe('generate — water forms connected bodies (not uniform noise)', () => {
+  const SEEDS = [1, 2, 3, 12345, 999, 42, 7, 100];
+
+  /** Orthogonal water neighbours of `cell`. */
+  function waterNeighbours(level: Level, cell: CellId): CellId[] {
+    const out: CellId[] = [];
+    for (const dir of level.topology.directions) {
+      const n = level.topology.neighbor(cell, dir);
+      if (n !== undefined && decorOf(level, n) === 'water') out.push(n);
+    }
+    return out;
+  }
+
+  const waterCells = (level: Level): CellId[] =>
+    level.topology.cells.filter((c) => decorOf(level, c) === 'water');
+
+  /** Sizes of the connected (orthogonal) water bodies, largest first. */
+  function bodySizes(level: Level): number[] {
+    const water = new Set(waterCells(level));
+    const seen = new Set<CellId>();
+    const sizes: number[] = [];
+    for (const start of water) {
+      if (seen.has(start)) continue;
+      let size = 0;
+      const stack = [start];
+      seen.add(start);
+      while (stack.length > 0) {
+        const c = stack.pop() as CellId;
+        size++;
+        for (const n of waterNeighbours(level, c)) {
+          if (!seen.has(n)) {
+            seen.add(n);
+            stack.push(n);
+          }
+        }
+      }
+      sizes.push(size);
+    }
+    return sizes.sort((a, b) => b - a);
+  }
+
+  it('assigns a water/tree/flower decor to exactly the obstacle cells', () => {
+    const { level } = generate(BASE);
+    for (const cell of level.topology.cells) {
+      const isObstacle = !traitsOf(level, cell).passable;
+      const decor = decorOf(level, cell);
+      if (isObstacle) {
+        expect(decor).toBeDefined();
+        expect(['water', 'tree', 'flower']).toContain(decor);
+      } else {
+        expect(decor).toBeUndefined();
+      }
+    }
+  });
+
+  it('never leaves a lone water tile — every water cell touches another (a body of ≥2)', () => {
+    for (const seed of SEEDS) {
+      const { level } = generate({ ...BASE, seed });
+      for (const cell of waterCells(level)) {
+        expect(waterNeighbours(level, cell).length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('grows water into sizeable bodies rather than scattering single tiles', () => {
+    // Pooled across seeds: the largest body on a typical board is many tiles, and the
+    // mean body is well above the ~1.3 a uniform-random sprinkle at this density gives.
+    let biggest = 0;
+    let cells = 0;
+    let bodies = 0;
+    for (const seed of SEEDS) {
+      const sizes = bodySizes(generate({ ...BASE, seed }).level);
+      if (sizes.length === 0) continue;
+      biggest = Math.max(biggest, sizes[0]);
+      cells += sizes.reduce((a, b) => a + b, 0);
+      bodies += sizes.length;
+    }
+    expect(biggest).toBeGreaterThanOrEqual(8); // at least one proper lake
+    expect(cells / bodies).toBeGreaterThanOrEqual(3); // bodies average ≥3 tiles
+  });
+
+  it('is reproducible per seed (decor matches cell-for-cell)', () => {
+    const a = generate(BASE).level;
+    const b = generate(BASE).level;
+    for (const cell of a.topology.cells) {
+      expect(decorOf(a, cell)).toBe(decorOf(b, cell));
+    }
   });
 });
 

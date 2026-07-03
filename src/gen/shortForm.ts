@@ -14,8 +14,13 @@
 import type { Level } from '../model/index.ts';
 import { generate, type GeneratorConfig } from './generator.ts';
 
-/** Current generator algorithm version. Bump only on a generation-changing edit. */
-export const GENERATOR_VERSION = 1;
+/**
+ * Current generator algorithm version. Bump only on a generation-changing edit.
+ * v2 adds clustered water bodies and per-obstacle decoration (lawnmower.md §3):
+ * traits/walk are byte-identical to v1 for a seed, but the level now looks different,
+ * so an old code must decode against v1 and fail loudly rather than silently reskin.
+ */
+export const GENERATOR_VERSION = 2;
 
 const SEPARATOR = '.';
 

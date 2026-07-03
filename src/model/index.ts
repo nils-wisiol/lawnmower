@@ -5,6 +5,7 @@ export type {
   CellId,
   CellPoint,
   CellTraits,
+  Decor,
   Direction,
   InputDirection,
   Level,
@@ -12,7 +13,7 @@ export type {
   TimerStart,
   Topology,
 } from './types.ts';
-export { countMowable, traitsOf, levelConfig, DEFAULT_LEVEL_CONFIG } from './types.ts';
+export { countMowable, decorOf, traitsOf, levelConfig, DEFAULT_LEVEL_CONFIG } from './types.ts';
 
 export { Stopwatch, systemClock, formatTime, type Clock } from './timing.ts';
 

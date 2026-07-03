@@ -34,21 +34,25 @@ describe('short-form — version pinning (mismatch detected, not silently expand
 });
 
 describe('short-form — malformed codes fail loudly', () => {
+  // Use the live version so these exercise the field checks, not the version guard
+  // (which runs first and would otherwise mask a malformed seed/size/coverage).
+  const V = GENERATOR_VERSION;
+
   it('rejects the wrong number of parts', () => {
-    expect(() => decodeShortForm('1.12345.10x8')).toThrow(/4 parts/);
+    expect(() => decodeShortForm(`${V}.12345.10x8`)).toThrow(/4 parts/);
   });
 
   it('rejects a non-integer seed', () => {
-    expect(() => decodeShortForm('1.12x45.10x8.70')).toThrow(/seed/);
+    expect(() => decodeShortForm(`${V}.12x45.10x8.70`)).toThrow(/seed/);
   });
 
   it('rejects a malformed size', () => {
-    expect(() => decodeShortForm('1.12345.10-8.70')).toThrow(/WxH/);
+    expect(() => decodeShortForm(`${V}.12345.10-8.70`)).toThrow(/WxH/);
   });
 
   it('rejects coverage% outside (0, 100]', () => {
-    expect(() => decodeShortForm('1.12345.10x8.0')).toThrow(/coverage/);
-    expect(() => decodeShortForm('1.12345.10x8.150')).toThrow(/coverage/);
+    expect(() => decodeShortForm(`${V}.12345.10x8.0`)).toThrow(/coverage/);
+    expect(() => decodeShortForm(`${V}.12345.10x8.150`)).toThrow(/coverage/);
   });
 });
 
