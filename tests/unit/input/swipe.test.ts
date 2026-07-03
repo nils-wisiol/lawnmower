@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  attachSwipe,
-  DEFAULT_SWIPE_THRESHOLD,
-  swipeDirection,
-} from '../../../src/input/swipe.ts';
+import { attachSwipe, DEFAULT_SWIPE_THRESHOLD, swipeDirection } from '../../../src/input/swipe.ts';
 
 describe('swipeDirection', () => {
   it('maps the dominant axis of travel to the four intents', () => {
@@ -22,7 +18,9 @@ describe('swipeDirection', () => {
 
   it('returns undefined for a sub-threshold gesture (a tap, not a swipe)', () => {
     expect(swipeDirection(0, 0)).toBeUndefined();
-    expect(swipeDirection(DEFAULT_SWIPE_THRESHOLD - 1, DEFAULT_SWIPE_THRESHOLD - 1)).toBeUndefined();
+    expect(
+      swipeDirection(DEFAULT_SWIPE_THRESHOLD - 1, DEFAULT_SWIPE_THRESHOLD - 1),
+    ).toBeUndefined();
   });
 
   it('honours a custom threshold', () => {
@@ -100,7 +98,9 @@ describe('attachSwipe', () => {
     const first = { identifier: 1, clientX: 0, clientY: 0 };
     target.fire('touchstart', { changedTouches: touchList(first) });
     // A second finger lands mid-gesture — must be ignored.
-    target.fire('touchstart', { changedTouches: touchList({ identifier: 2, clientX: 200, clientY: 0 }) });
+    target.fire('touchstart', {
+      changedTouches: touchList({ identifier: 2, clientX: 200, clientY: 0 }),
+    });
     target.fire('touchend', {
       changedTouches: touchList({ ...first, clientX: DEFAULT_SWIPE_THRESHOLD + 5 }),
     });
@@ -126,7 +126,10 @@ describe('attachSwipe', () => {
 
   it('detaches every listener cleanly', () => {
     const target = fakeTarget();
-    const detach = attachSwipe(target as unknown as HTMLElement, { onMove: vi.fn(), onTap: vi.fn() });
+    const detach = attachSwipe(target as unknown as HTMLElement, {
+      onMove: vi.fn(),
+      onTap: vi.fn(),
+    });
     expect(target.attachedTypes).toContain('touchstart');
     detach();
     expect(target.attachedTypes).toHaveLength(0);
