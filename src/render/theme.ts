@@ -55,8 +55,10 @@ export const gardenTheme: Theme = {
   background: '#1e2b1a',
   gridLine: '#16210f',
 
-  grassUnmowed: '#5a9e3f',
-  grassMowed: '#3c6b2a',
+  // Uncut grass reads as deep/overgrown (darker); a freshly mown stripe reads as
+  // the bright, pale-green of just-cut lawn — so the mown trail lightens as you go.
+  grassUnmowed: '#3c6b2a',
+  grassMowed: '#5a9e3f',
   obstacle: '#3f5a74',
   path: '#c8b071',
 
