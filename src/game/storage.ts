@@ -11,6 +11,8 @@
 const BEST_PREFIX = 'lawnmower:v1:best:';
 const HISTORY_KEY = 'lawnmower:v1:seeds';
 const HISTORY_LIMIT = 20;
+/** Set once the player has been shown the first-run tutorial (M6 onboarding). */
+const TUTORIAL_SEEN_KEY = 'lawnmower:v1:tutorial-seen';
 
 /** The slice of the Storage API we use — localStorage in the browser, a fake in tests. */
 export interface StorageLike {
@@ -44,6 +46,16 @@ export class LevelStore {
     if (prev !== undefined && prev <= ms) return false;
     this.write(BEST_PREFIX + code, String(ms));
     return true;
+  }
+
+  /** Whether the first-run tutorial has already been shown (M6 onboarding gate). */
+  hasSeenTutorial(): boolean {
+    return this.read(TUTORIAL_SEEN_KEY) === '1';
+  }
+
+  /** Remember that the tutorial has been shown, so a reload doesn't force it again. */
+  markTutorialSeen(): void {
+    this.write(TUTORIAL_SEEN_KEY, '1');
   }
 
   /** Recently played level codes, most-recent first. */

@@ -9,6 +9,7 @@ import {
   randomLevel,
 } from '../../../src/game/defaultLevel.ts';
 import { levelFromShortForm } from '../../../src/gen/index.ts';
+import { TUTORIAL_CODE } from '../../../src/game/tutorial.ts';
 import { countMowable } from '../../../src/model/index.ts';
 
 describe('levelFromCode — expanding a shared code', () => {
@@ -46,6 +47,10 @@ describe('bootLevel — choosing the level to boot from a hash', () => {
 
   it('falls back to the default when a hash code is unusable', () => {
     expect(bootLevel('#garbage').code).toBe(DEFAULT_LEVEL_CODE);
+  });
+
+  it('resolves the reserved #tutorial hash to the tutorial lawn', () => {
+    expect(bootLevel('#tutorial').code).toBe(TUTORIAL_CODE);
   });
 });
 

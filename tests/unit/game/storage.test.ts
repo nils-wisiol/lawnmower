@@ -88,6 +88,21 @@ describe('LevelStore — seed history', () => {
   });
 });
 
+describe('LevelStore — tutorial-seen flag (M6 onboarding gate)', () => {
+  it('is unseen until marked, then stays seen', () => {
+    const store = new LevelStore(fakeStorage());
+    expect(store.hasSeenTutorial()).toBe(false);
+    store.markTutorialSeen();
+    expect(store.hasSeenTutorial()).toBe(true);
+  });
+
+  it('degrades to "unseen" when storage is unavailable', () => {
+    const store = new LevelStore(throwingStorage());
+    expect(() => store.markTutorialSeen()).not.toThrow();
+    expect(store.hasSeenTutorial()).toBe(false);
+  });
+});
+
 describe('LevelStore — unavailable storage degrades safely', () => {
   it('treats an undefined store as no-persistence', () => {
     const store = new LevelStore(undefined);
