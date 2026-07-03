@@ -59,7 +59,23 @@ describe('SquareGrid topology', () => {
     expect(grid.cellAt({ x: -1, y: 0 })).toBeUndefined();
     expect(grid.cellAt({ x: 4, y: 0 })).toBeUndefined();
   });
+
+  it('outlines a unit square centred on the cell (tiles the integer layout)', () => {
+    const poly = new SquareGrid(2, 2).cellPolygon();
+    expect([...poly].sort(byXThenY)).toEqual(
+      [
+        { x: -0.5, y: -0.5 },
+        { x: -0.5, y: 0.5 },
+        { x: 0.5, y: -0.5 },
+        { x: 0.5, y: 0.5 },
+      ].sort(byXThenY),
+    );
+  });
 });
+
+function byXThenY(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return a.x - b.x || a.y - b.y;
+}
 
 function grid_layout_matches(id: string): boolean {
   const grid = new SquareGrid(8, 8);

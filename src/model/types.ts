@@ -93,7 +93,11 @@ export interface Topology {
   neighbor(cell: CellId, direction: Direction): CellId | undefined;
   /** Map an abstract input intent onto a direction, or undefined if unmapped. */
   directionForInput(input: InputDirection): Direction | undefined;
-  /** Pixel-space layout of a cell, for rendering. */
+  /**
+   * Pixel-space layout of a cell, for rendering. The returned point is the cell's
+   * *centre* (the anchor `cellPolygon` is drawn around and `cellAt` inverts), in
+   * cell-units the renderer scales.
+   */
   layout(cell: CellId): CellPoint;
   /**
    * The inverse of `layout`: the cell containing point `p` (in the same cell-unit
@@ -103,6 +107,14 @@ export interface Topology {
    * knowledge in the app.
    */
   cellAt(p: CellPoint): CellId | undefined;
+  /**
+   * The cell's outline as polygon vertices *relative to its centre* (the `layout`
+   * point), in cell-units — a unit square for a square grid, a flat-top hexagon for
+   * a hex grid (hexagonal.md §2.1, H3). Every cell of a grid shares one shape, so
+   * this takes no cell. The renderer paths these vertices to fill/stroke each cell,
+   * drawing squares or hexagons without knowing which geometry it has.
+   */
+  cellPolygon(): readonly CellPoint[];
 }
 
 /**

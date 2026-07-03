@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  boardExtent,
+  cellAtPx,
+  cellCenterPx,
   cellFill,
   fitCellSize,
   legalNeighbors,
@@ -8,6 +11,7 @@ import {
 } from '../../../src/render/canvasRenderer.ts';
 import { gardenTheme } from '../../../src/render/theme.ts';
 import { WATER_EDGE } from '../../../src/render/gardenSprites.ts';
+import { generate } from '../../../src/gen/index.ts';
 import {
   createGame,
   levelFromAscii,
@@ -196,6 +200,49 @@ describe('legalNeighbors (move affordances)', () => {
     expect(won.status).toBe('won');
     expect(legalNeighbors(level, won)).toEqual([]);
   });
+});
+
+// Renderer geometry (hexagonal.md H3): the board is packed and hit-tested from the
+// cell *outlines*, so it fits and clicks correctly for both square and offset-row hex
+// without a real canvas. `boardExtent` measures the true on-screen span; `cellCenterPx`
+// / `cellAtPx` are the layout↔pixel transform the mower placement and click/tap use.
+describe('boardExtent (packing from cell outlines)', () => {
+  it('a square board spans width×height with a ½-cell margin from centre outlines', () => {
+    const level = generate({ seed: 1, width: 4, height: 3, coverage: 0.7 }).level;
+    const e = boardExtent(level);
+    expect(e).toEqual({ minX: -0.5, minY: -0.5, width: 4, height: 3 });
+  });
+
+  it('a hex board is wider/taller than its centres — the pointed sides are counted', () => {
+    const level = generate({ seed: 1, width: 4, height: 3, coverage: 0.7, shape: 'hex' }).level;
+    const e = boardExtent(level);
+    // Flat-top hexes of circumradius 1: columns step 1.5 (so 4 cols span 4.5 + a corner
+    // each side = 6.5) and rows step √3 with a half-row offset (3.5·√3 tall).
+    expect(e.width).toBeCloseTo(6.5);
+    expect(e.height).toBeCloseTo(3.5 * Math.sqrt(3));
+    expect(e.minX).toBeCloseTo(-1);
+  });
+});
+
+describe('cellCenterPx ↔ cellAtPx (click/tap hit-test round-trip)', () => {
+  for (const shape of ['square', 'hex'] as const) {
+    it(`maps every ${shape} cell's centre pixel back to that cell`, () => {
+      const level = generate({ seed: 7, width: 5, height: 4, coverage: 0.7, shape }).level;
+      const extent = boardExtent(level);
+      const cellSize = fitCellSize(extent.width, { cellSize: 48 });
+      for (const cell of level.topology.cells) {
+        const { cx, cy } = cellCenterPx(level, cell, cellSize, extent);
+        expect(cellAtPx(level, cx, cy, cellSize, extent)).toBe(cell);
+      }
+    });
+
+    it(`returns undefined for a point off the ${shape} board`, () => {
+      const level = generate({ seed: 7, width: 5, height: 4, coverage: 0.7, shape }).level;
+      const extent = boardExtent(level);
+      const cellSize = fitCellSize(extent.width, { cellSize: 48 });
+      expect(cellAtPx(level, -100, -100, cellSize, extent)).toBeUndefined();
+    });
+  }
 });
 
 /** Perceptual (Rec. 709) luminance of a #rrggbb colour, for brightness comparisons. */
