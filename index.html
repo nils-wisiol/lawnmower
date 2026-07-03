@@ -36,6 +36,9 @@
         image-rendering: pixelated;
         border-radius: 4px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        /* Own all touch gestures on the board so swipes drive the mower instead
+           of scrolling/zooming the page (see src/input/swipe.ts). */
+        touch-action: none;
       }
       p.status {
         margin: 0;
