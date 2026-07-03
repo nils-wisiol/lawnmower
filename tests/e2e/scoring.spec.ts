@@ -10,6 +10,11 @@ const ARROW: Record<InputDirection, string> = {
   down: 'ArrowDown',
   left: 'ArrowLeft',
   right: 'ArrowRight',
+  // Hex diagonal keys — never pressed on this square level, but the map is total.
+  upLeft: 'q',
+  upRight: 'e',
+  downLeft: 'z',
+  downRight: 'c',
 };
 
 // The M4 play loop: start → win (with a recorded time) → next level. Drives the

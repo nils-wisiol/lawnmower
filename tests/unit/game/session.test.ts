@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GameSession } from '../../../src/game/session.ts';
-import { levelFromAscii, type Clock, type Level } from '../../../src/model/index.ts';
+import { cellId, levelFromAscii, type Clock, type Level } from '../../../src/model/index.ts';
 
 /** Deterministic clock so the wall-clock timer is testable without real time. */
 function fakeClock(): Clock & { advance(ms: number): void } {
@@ -104,6 +104,41 @@ describe('GameSession — fail reasons', () => {
     expect(session.status).toBe('playing');
     expect(session.remainingMs()).toBeUndefined();
     expect(session.timeLimitMs()).toBeUndefined();
+  });
+});
+
+describe('GameSession — moveTo (tap/click-to-move)', () => {
+  it('steps onto a neighbour and starts the clock, like a keyed move', () => {
+    const clock = fakeClock();
+    const session = new GameSession(rowLevel(), { clock });
+
+    expect(session.moveTo(cellId(1, 0))).toBe('moved');
+    expect(session.state.position).toBe(cellId(1, 0));
+    clock.advance(1200);
+    expect(session.elapsedMs()).toBe(1200); // clock started on the tap-move
+  });
+
+  it('rejects a non-neighbour tap as a no-op (a stray tap keeps progress)', () => {
+    const session = new GameSession(rowLevel(), { clock: fakeClock() });
+
+    // Cell (2,0) is two steps from the start — not a current neighbour.
+    expect(session.moveTo(cellId(2, 0))).toBe('blocked');
+    expect(session.state.position).toBe(cellId(0, 0));
+    expect(session.status).toBe('playing');
+  });
+
+  it('shares the fail rules: tapping back onto a mowed cell crashes', () => {
+    const session = new GameSession(rowLevel(), { clock: fakeClock() });
+    session.moveTo(cellId(1, 0));
+    expect(session.moveTo(cellId(0, 0))).toBe('lost'); // back onto the mowed start
+    expect(session.failReason).toBe('crash');
+  });
+
+  it('wins when a tap mows the final cell', () => {
+    const session = new GameSession(rowLevel(), { clock: fakeClock() });
+    session.moveTo(cellId(1, 0));
+    expect(session.moveTo(cellId(2, 0))).toBe('won');
+    expect(session.status).toBe('won');
   });
 });
 

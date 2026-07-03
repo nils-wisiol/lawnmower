@@ -19,8 +19,25 @@ export type Direction = string;
  * Abstract input intent produced by the input pipeline (arrow keys, swipes),
  * before a Topology maps it onto one of its Directions. This indirection is why
  * hex + swipe mapping (lawnmower.md §10) can be solved without touching core rules.
+ *
+ * The set is the *superset* of every geometry's movement intents (hexagonal.md §2.2):
+ * a square grid uses the four cardinals; a flat-top hex uses the vertical pair plus
+ * the four diagonals (and no left/right). Each Topology maps the intents it cares
+ * about via `directionForInput` and returns undefined for the rest, so the keyboard
+ * and swipe layers stay geometry-blind — a key/gesture means a fixed intent, and the
+ * topology decides what (if anything) that intent does.
  */
-export type InputDirection = 'up' | 'down' | 'left' | 'right';
+export type InputDirection =
+  'up' | 'down' | 'left' | 'right' | 'upLeft' | 'upRight' | 'downLeft' | 'downRight';
+
+/**
+ * The mower's rendered heading — the four cardinal facings its sprite can show. A
+ * render-only concept, distinct from the (wider) InputDirection intent set: a move
+ * in any intent, from any modality (key, swipe, tap-to-move), is reduced to the
+ * nearest cardinal facing from its screen-space delta (hexagonal.md §2.6). True
+ * six-heading hex facing is an H3 concern; until then diagonals round to a cardinal.
+ */
+export type Facing = 'up' | 'down' | 'left' | 'right';
 
 /**
  * The two orthogonal traits of a cell (lawnmower.md §2). Deliberately NOT a single

@@ -6,7 +6,7 @@
 // game with no renderer or logic change (§5 theming layer).
 
 import { rotateCW, sprite, type Sprite } from './sprite.ts';
-import type { InputDirection } from '../model/index.ts';
+import type { Facing } from '../model/index.ts';
 
 /** Every sprite is authored on a fixed 16×16 pixel grid, integer-scaled by the renderer. */
 const TILE = 16;
@@ -371,7 +371,7 @@ const mowerRight = rotateCW(mowerUp);
 const mowerDown = rotateCW(mowerRight);
 const mowerLeft = rotateCW(mowerDown);
 
-const mower: Record<InputDirection, Sprite> = {
+const mower: Record<Facing, Sprite> = {
   up: mowerUp,
   right: mowerRight,
   down: mowerDown,

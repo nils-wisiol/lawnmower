@@ -25,6 +25,21 @@ export function inputForKey(key: string): InputDirection | undefined {
     case 'd':
     case 'D':
       return 'right';
+    // Hex diagonals (hexagonal.md §2.2). Q/E/Z/C form the four-diagonal cluster on
+    // the keyboard; they take their own keys rather than overloading A/D (already
+    // left/right), so square play never sees them and hex play never fights WASD.
+    case 'q':
+    case 'Q':
+      return 'upLeft';
+    case 'e':
+    case 'E':
+      return 'upRight';
+    case 'z':
+    case 'Z':
+      return 'downLeft';
+    case 'c':
+    case 'C':
+      return 'downRight';
     default:
       return undefined;
   }

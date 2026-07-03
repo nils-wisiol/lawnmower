@@ -12,7 +12,7 @@ import {
   type Decor,
   type Level,
 } from '../model/index.ts';
-import type { FailReason, GameState, InputDirection } from '../model/index.ts';
+import type { Facing, FailReason, GameState } from '../model/index.ts';
 import { drawSprite, variantFor, type Sprite } from './sprite.ts';
 import { WATER_EDGE } from './gardenSprites.ts';
 import type { Theme } from './theme.ts';
@@ -56,12 +56,12 @@ export interface RenderAnim {
     readonly from: CellId;
     readonly to: CellId;
     readonly t: number;
-    readonly facing: InputDirection;
+    readonly facing: Facing;
   };
   /** A just-mown cell popping. `t` in [0,1] (0 = the instant it was cut, 1 = settled). */
   readonly pop?: { readonly cell: CellId; readonly t: number };
   /** The mower's current heading when at rest, so the idle sprite still faces right. */
-  readonly facing?: InputDirection;
+  readonly facing?: Facing;
 }
 
 /** Below this much time left, the HUD clock turns to the danger colour. */
@@ -71,7 +71,7 @@ const DEFAULT_CELL_SIZE = 48;
 const DEFAULT_GAP = 2;
 
 /** Default mower heading before the first move (also the render-test fallback). */
-const DEFAULT_FACING: InputDirection = 'right';
+const DEFAULT_FACING: Facing = 'right';
 
 /**
  * Pick a cell edge length that keeps `cols` cells within `maxWidth` CSS pixels,
@@ -250,6 +250,22 @@ export class CanvasRenderer {
       px: (x - this.origin.minX) * this.cellSize,
       py: (y - this.origin.minY) * this.cellSize,
     };
+  }
+
+  /**
+   * The cell under a CSS-pixel point (0,0 = the canvas's top-left), or undefined if
+   * the point is off the board — the inverse of `cellOrigin`, delegating the actual
+   * point→cell test to `topology.cellAt` so it stays geometry-blind (hexagonal.md
+   * §2.6). This is what turns a click/tap position into a move target.
+   *
+   * `cellOrigin` anchors a cell's layout point at the *top-left* of its cellSize box,
+   * whereas `topology.cellAt` treats the layout point as the cell *centre* — so we
+   * shift the point to the box centre (−½ a cell) before inverting the scale/origin.
+   */
+  cellAtPixel(cssX: number, cssY: number): CellId | undefined {
+    const x = (cssX - this.cellSize / 2) / this.cellSize + this.origin.minX;
+    const y = (cssY - this.cellSize / 2) / this.cellSize + this.origin.minY;
+    return this.level.topology.cellAt({ x, y });
   }
 
   /**

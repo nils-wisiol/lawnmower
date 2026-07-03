@@ -7,6 +7,7 @@ export type {
   CellTraits,
   Decor,
   Direction,
+  Facing,
   InputDirection,
   Level,
   LevelConfig,

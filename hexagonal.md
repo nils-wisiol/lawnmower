@@ -228,6 +228,13 @@ otherwise fall back to the existing restart/next behaviour (§2.6 policy). Confi
 **Done when:** input unit tests cover the 6-way keyboard, 6-sector swipe, and the
 tap-vs-restart branch table; a click/tap on a legal neighbour moves the mower and a
 stray mid-play tap is a no-op; **all existing square input/e2e tests still pass**.
+_(Done — `InputDirection` widened; a render-only `Facing` type keeps the mower sprite
+at four headings; the swipe classifier buckets a gesture into the topology's own intent
+set (4 quadrants square / 6 sectors hex) via a canonical-vector dot product; `onTap`
+carries coordinates and a desktop `click` handler shares the hit-test; `cellAtPixel`
+was brought forward from H3 (its H3 unit-test lands with the renderer-geometry rework —
+here it is exercised through the click/tap e2e). `solve.ts` now drives all 8 intents so
+it can replay a hex walk.)_
 
 ### H3 — Hex rendering _(the big visual slice)_
 

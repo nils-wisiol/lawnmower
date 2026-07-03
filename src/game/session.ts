@@ -15,8 +15,10 @@ import {
   fail,
   levelConfig,
   move,
+  moveTo,
   Stopwatch,
   systemClock,
+  type CellId,
   type Clock,
   type FailReason,
   type GameState,
@@ -119,15 +121,36 @@ export class GameSession {
     const result = move(this._state, input);
     if (result.outcome === 'blocked') return 'blocked';
 
+    return this.applyResult(result.state, result.outcome);
+  }
+
+  /**
+   * Attempt to move straight onto `target` (click/tap-to-move, hexagonal.md §2.6):
+   * legal only when `target` is a current neighbour, otherwise `blocked` with no
+   * effect. Shares the exact timing/fail bookkeeping as `move` — a tap and a key
+   * press are the same move as far as the clock and the win/loss rules are concerned.
+   */
+  moveTo(target: CellId): MoveOutcome {
+    this.tick(); // a pending timeout fails the run before this move can land
+    if (this._state.status !== 'playing') return 'blocked';
+
+    const result = moveTo(this._state, target);
+    if (result.outcome === 'blocked') return 'blocked';
+
+    return this.applyResult(result.state, result.outcome);
+  }
+
+  /** Commit a non-blocked move result: start/stop the clock and record a loss cause. */
+  private applyResult(state: GameState, outcome: MoveOutcome): MoveOutcome {
     this.timer.start(); // idempotent: first-move start; no-op once running
-    this._state = result.state;
+    this._state = state;
     if (this._state.status === 'lost') {
       this._failReason = 'crash';
       this.timer.stop();
     } else if (this._state.status === 'won') {
       this.timer.stop();
     }
-    return result.outcome;
+    return outcome;
   }
 
   /** Restart the current level (instant retry — §4). Resets the clock. */

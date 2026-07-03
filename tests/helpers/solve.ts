@@ -13,7 +13,20 @@ import {
 } from '../../src/model/index.ts';
 import type { GameState } from '../../src/model/index.ts';
 
-const INPUTS: readonly InputDirection[] = ['up', 'down', 'left', 'right'];
+// The full intent superset (hexagonal.md §2.2): the four square cardinals plus the
+// four hex diagonals. A topology ignores the intents it doesn't map, so this one list
+// drives both a square and a hex board — the 6-way keys that let solve.ts replay a hex
+// walk landed with H2.
+const INPUTS: readonly InputDirection[] = [
+  'up',
+  'down',
+  'left',
+  'right',
+  'upLeft',
+  'upRight',
+  'downLeft',
+  'downRight',
+];
 
 /**
  * Convert a self-avoiding walk (consecutive cells) into the input sequence that
