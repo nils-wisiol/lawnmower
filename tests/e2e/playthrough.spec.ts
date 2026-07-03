@@ -5,11 +5,17 @@ import { DEFAULT_LEVEL_CODE } from '../../src/game/defaultLevel.ts';
 import type { InputDirection } from '../../src/model/index.ts';
 import { walkToInputs } from '../helpers/solve.ts';
 
+// Key per intent. Cardinals use the arrows; the hex diagonals use their Q/E/Z/C keys
+// (never pressed on this square level, but the map must cover the full intent set).
 const ARROW: Record<InputDirection, string> = {
   up: 'ArrowUp',
   down: 'ArrowDown',
   left: 'ArrowLeft',
   right: 'ArrowRight',
+  upLeft: 'q',
+  upRight: 'e',
+  downLeft: 'z',
+  downRight: 'c',
 };
 
 const OPPOSITE: Record<InputDirection, InputDirection> = {
@@ -17,6 +23,10 @@ const OPPOSITE: Record<InputDirection, InputDirection> = {
   down: 'up',
   left: 'right',
   right: 'left',
+  upLeft: 'downRight',
+  downRight: 'upLeft',
+  upRight: 'downLeft',
+  downLeft: 'upRight',
 };
 
 // The app boots the generated default level; the generator hands us the walk that

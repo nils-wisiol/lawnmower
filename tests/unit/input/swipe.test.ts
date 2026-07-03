@@ -1,6 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { HexGrid, type InputDirection } from '../../../src/model/index.ts';
 import { attachSwipe, DEFAULT_SWIPE_THRESHOLD, swipeDirection } from '../../../src/input/swipe.ts';
+
+// The six intents a flat-top hex accepts, derived exactly as the app does (filtering
+// the intent superset by what the topology maps) so the sector test can't drift.
+const ALL_INPUTS: readonly InputDirection[] = [
+  'up',
+  'down',
+  'left',
+  'right',
+  'upLeft',
+  'upRight',
+  'downLeft',
+  'downRight',
+];
+const hex = new HexGrid(4, 4);
+const HEX_INTENTS = ALL_INPUTS.filter((i) => hex.directionForInput(i) !== undefined);
 
 describe('swipeDirection', () => {
   it('maps the dominant axis of travel to the four intents', () => {
@@ -16,6 +32,11 @@ describe('swipeDirection', () => {
     expect(swipeDirection(15, -40)).toBe('up'); // mostly vertical
   });
 
+  it('resolves a perfect diagonal to the horizontal axis (square tie-break)', () => {
+    expect(swipeDirection(40, 40)).toBe('right');
+    expect(swipeDirection(-40, -40)).toBe('left');
+  });
+
   it('returns undefined for a sub-threshold gesture (a tap, not a swipe)', () => {
     expect(swipeDirection(0, 0)).toBeUndefined();
     expect(
@@ -26,6 +47,30 @@ describe('swipeDirection', () => {
   it('honours a custom threshold', () => {
     expect(swipeDirection(30, 0, 50)).toBeUndefined();
     expect(swipeDirection(60, 0, 50)).toBe('right');
+  });
+
+  it('classifies into six 60° sectors for the hex intent set', () => {
+    const t = DEFAULT_SWIPE_THRESHOLD;
+    // Straight up/down, then the four flat-top diagonals (±30° off horizontal).
+    expect(swipeDirection(0, -2 * t, t, HEX_INTENTS)).toBe('up');
+    expect(swipeDirection(0, 2 * t, t, HEX_INTENTS)).toBe('down');
+    expect(swipeDirection(2 * t, -t, t, HEX_INTENTS)).toBe('upRight');
+    expect(swipeDirection(2 * t, t, t, HEX_INTENTS)).toBe('downRight');
+    expect(swipeDirection(-2 * t, -t, t, HEX_INTENTS)).toBe('upLeft');
+    expect(swipeDirection(-2 * t, t, t, HEX_INTENTS)).toBe('downLeft');
+  });
+
+  it('never yields left/right on hex (a flat-top hex has no pure E/W)', () => {
+    // A pure horizontal swipe still resolves to a hex heading, never the unmapped
+    // left/right — it lands on whichever adjacent diagonal wins the tie.
+    const dir = swipeDirection(
+      3 * DEFAULT_SWIPE_THRESHOLD,
+      0,
+      DEFAULT_SWIPE_THRESHOLD,
+      HEX_INTENTS,
+    );
+    expect(dir).toBe('upRight');
+    expect(dir).not.toBe('right');
   });
 });
 
@@ -87,7 +132,29 @@ describe('attachSwipe', () => {
     target.fire('touchend', { changedTouches: touchList({ ...touch, clientX: 52, clientY: 51 }) });
 
     expect(onTap).toHaveBeenCalledTimes(1);
+    // The tap carries its end coordinates so the app can hit-test it (tap-to-move).
+    expect(onTap).toHaveBeenCalledWith({ x: 52, y: 51 });
     expect(onMove).not.toHaveBeenCalled();
+  });
+
+  it('classifies a gesture against the geometry-supplied intent set', () => {
+    const target = fakeTarget();
+    const onMove = vi.fn();
+    // A hex intent set (no left/right): a mostly-rightward swipe must resolve to a
+    // hex diagonal, proving attachSwipe forwards the per-gesture intents.
+    attachSwipe(
+      target as unknown as HTMLElement,
+      { onMove, onTap: vi.fn() },
+      { intents: () => HEX_INTENTS },
+    );
+
+    const touch = { identifier: 4, clientX: 0, clientY: 0 };
+    target.fire('touchstart', { changedTouches: touchList(touch) });
+    target.fire('touchend', {
+      changedTouches: touchList({ ...touch, clientX: 2 * DEFAULT_SWIPE_THRESHOLD, clientY: -20 }),
+    });
+
+    expect(onMove).toHaveBeenCalledWith('upRight');
   });
 
   it('follows only the first finger, so a second touch does not start a new gesture', () => {

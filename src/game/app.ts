@@ -12,9 +12,13 @@ import { attachSwipe } from '../input/swipe.ts';
 import {
   formatTime,
   systemClock,
+  type CellId,
   type Clock,
+  type Facing,
   type InputDirection,
   type Level,
+  type MoveOutcome,
+  type Topology,
 } from '../model/index.ts';
 import {
   CanvasRenderer,
@@ -38,6 +42,42 @@ const BOARD_MARGIN = 16;
 // and both collapse to 0 (snap) under prefers-reduced-motion (§4 accessibility).
 const SLIDE_MS = 90;
 const POP_MS = 200;
+
+/** Every abstract movement intent, in the order the swipe classifier prefers on ties. */
+const ALL_INPUTS: readonly InputDirection[] = [
+  'up',
+  'down',
+  'left',
+  'right',
+  'upLeft',
+  'upRight',
+  'downLeft',
+  'downRight',
+];
+
+/**
+ * The movement intents a topology actually maps — what the 6-sector swipe classifier
+ * buckets a gesture into (hexagonal.md §2.2). Square yields the four cardinals; a
+ * flat-top hex yields the vertical pair plus the four diagonals.
+ */
+function supportedInputs(topology: Topology): InputDirection[] {
+  return ALL_INPUTS.filter((input) => topology.directionForInput(input) !== undefined);
+}
+
+/**
+ * The mower's cardinal facing for a step, derived from its screen-space layout delta
+ * (hexagonal.md §2.6). Works for every modality — key, swipe, and tap-to-move (which
+ * has no input intent at all) — and every geometry, since it reads only the from→to
+ * vector. Diagonals round to the nearest cardinal until H3 gives the mower 6 headings.
+ */
+function facingForStep(topology: Topology, from: CellId, to: CellId): Facing {
+  const a = topology.layout(from);
+  const b = topology.layout(to);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'right' : 'left';
+  return dy >= 0 ? 'down' : 'up';
+}
 
 export interface GameAppOptions {
   readonly theme?: Theme;
@@ -148,10 +188,9 @@ export function mountGame(
   // Facing + in-flight animation for the M6 juice, tracked here (never in the model,
   // which stays instant). `facing` persists between moves so the idle mower keeps its
   // last heading; `anim` is the current slide/pop, retired by the frame loop.
-  let facing: InputDirection = 'right';
+  let facing: Facing = 'right';
   let anim:
-    | { from: string; to: string; facing: InputDirection; popCell?: string; start: number }
-    | undefined;
+    { from: string; to: string; facing: Facing; popCell?: string; start: number } | undefined;
   const reducedMotion =
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -312,21 +351,44 @@ export function mountGame(
     draw();
   };
 
-  const doMove = (input: Parameters<GameSession['move']>[0]): void => {
-    if (session.status !== 'playing') return;
-    const from = session.state.position;
-    const mowedBefore = session.state.mowed.size;
-    const outcome = session.move(input);
-    // Any non-blocked outcome moved the mower (a crash still slides into the fatal
-    // cell); pop the destination only when this move freshly cut a tile.
+  // Commit the visual side of a move the session already applied: set the mower's
+  // facing from where it actually went and, for a non-blocked outcome, start the
+  // slide (a crash still slides into the fatal cell); pop the destination only when
+  // this move freshly cut a tile. Shared by key/swipe moves and tap-to-move so every
+  // modality animates identically.
+  const applyMoveVisuals = (from: CellId, mowedBefore: number, outcome: MoveOutcome): void => {
     if (outcome !== 'blocked') {
-      facing = input;
       const to = session.state.position;
+      const stepFacing = facingForStep(session.level.topology, from, to);
+      facing = stepFacing;
       const freshlyMown = session.state.mowed.size > mowedBefore;
-      anim = { from, to, facing: input, popCell: freshlyMown ? to : undefined, start: animNow() };
+      anim = {
+        from,
+        to,
+        facing: stepFacing,
+        popCell: freshlyMown ? to : undefined,
+        start: animNow(),
+      };
     }
     recordWin();
     draw();
+  };
+
+  const doMove = (input: InputDirection): void => {
+    if (session.status !== 'playing') return;
+    const from = session.state.position;
+    const mowedBefore = session.state.mowed.size;
+    applyMoveVisuals(from, mowedBefore, session.move(input));
+  };
+
+  // Tap/click-to-move (hexagonal.md §2.6): step straight onto `target`. The session's
+  // moveTo no-ops (blocked) unless `target` is a current neighbour, so a tap that
+  // resolves to a non-neighbour or the current cell changes nothing.
+  const doMoveTo = (target: CellId): void => {
+    if (session.status !== 'playing') return;
+    const from = session.state.position;
+    const mowedBefore = session.state.mowed.size;
+    applyMoveVisuals(from, mowedBefore, session.moveTo(target));
   };
 
   const detachKeyboard = attachKeyboard(window, {
@@ -340,15 +402,33 @@ export function mountGame(
       else loadNextLawn();
     },
   });
-  // Swipes on the board mirror arrow keys; a tap only acts on a *finished* lawn, so
-  // a stray tap mid-run can't wipe out progress: retry after a loss, next after a win.
-  const detachSwipe = attachSwipe(canvas, {
-    onMove: doMove,
-    onTap: () => {
-      if (session.status === 'lost') replaySame();
-      else if (session.status === 'won') loadNextLawn();
-    },
-  });
+  // A click (desktop) or tap (touch) resolves to a board cell. While playing it is a
+  // one-step move onto a legal neighbour; a click/tap on the current cell or a
+  // non-neighbour hit-tests to a `blocked` moveTo — a no-op, so a stray tap still
+  // can't wipe out progress (hexagonal.md §2.6). On a *finished* lawn it falls back to
+  // the pre-tap behaviour: retry after a loss, next after a win.
+  const onPointer = (clientX: number, clientY: number): void => {
+    if (session.status === 'playing') {
+      const rect = canvas.getBoundingClientRect();
+      const target = renderer.cellAtPixel(clientX - rect.left, clientY - rect.top);
+      if (target !== undefined) doMoveTo(target);
+      return;
+    }
+    if (session.status === 'lost') replaySame();
+    else if (session.status === 'won') loadNextLawn();
+  };
+
+  // Swipes on the board mirror arrow keys; the swipe classifier buckets a gesture into
+  // whichever intents the current geometry accepts (4 quadrants for square, 6 sectors
+  // for hex), re-read per gesture so a level change takes effect without re-attaching.
+  const detachSwipe = attachSwipe(
+    canvas,
+    { onMove: doMove, onTap: (point) => onPointer(point.x, point.y) },
+    { intents: () => supportedInputs(session.level.topology) },
+  );
+  // Desktop click-to-move: the mouse analogue of tap, same hit-test and policy.
+  const onClick = (event: MouseEvent): void => onPointer(event.clientX, event.clientY);
+  canvas.addEventListener('click', onClick);
 
   // Frame loop: keep the on-board clock live and enforce the time-limit fail even
   // with no input (the timer never pauses — §2). Guarded so importing the app in a
@@ -402,6 +482,7 @@ export function mountGame(
     destroy: () => {
       detachKeyboard();
       detachSwipe();
+      canvas.removeEventListener('click', onClick);
       if (hasWindow) {
         window.removeEventListener('resize', onResize);
         window.removeEventListener('popstate', onPopState);

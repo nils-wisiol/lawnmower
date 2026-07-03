@@ -6,11 +6,18 @@ import type { InputDirection } from '../../src/model/index.ts';
 import { walkToInputs } from '../helpers/solve.ts';
 
 // Net finger travel per swipe, well over the module's threshold, per direction.
+// Net finger travel per intent. Cardinals are pure axis swipes; the hex diagonals
+// (never swiped on this square level) point at the flat-top hex headings, so the map
+// covers the whole intent set.
 const DELTA: Record<InputDirection, { dx: number; dy: number }> = {
   up: { dx: 0, dy: -60 },
   down: { dx: 0, dy: 60 },
   left: { dx: -60, dy: 0 },
   right: { dx: 60, dy: 0 },
+  upRight: { dx: 52, dy: -30 },
+  downRight: { dx: 52, dy: 30 },
+  upLeft: { dx: -52, dy: -30 },
+  downLeft: { dx: -52, dy: 30 },
 };
 
 const OPPOSITE: Record<InputDirection, InputDirection> = {
@@ -18,6 +25,10 @@ const OPPOSITE: Record<InputDirection, InputDirection> = {
   down: 'up',
   left: 'right',
   right: 'left',
+  upLeft: 'downRight',
+  downRight: 'upLeft',
+  upRight: 'downLeft',
+  downLeft: 'upRight',
 };
 
 // Same generated default level the app boots; the walk is a proven perfect mow,

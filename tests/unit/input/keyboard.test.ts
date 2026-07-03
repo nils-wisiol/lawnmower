@@ -18,6 +18,17 @@ describe('inputForKey', () => {
     expect(inputForKey('D')).toBe('right');
   });
 
+  it('maps Q/E/Z/C to the four hex diagonals (both cases)', () => {
+    expect(inputForKey('q')).toBe('upLeft');
+    expect(inputForKey('Q')).toBe('upLeft');
+    expect(inputForKey('e')).toBe('upRight');
+    expect(inputForKey('E')).toBe('upRight');
+    expect(inputForKey('z')).toBe('downLeft');
+    expect(inputForKey('Z')).toBe('downLeft');
+    expect(inputForKey('c')).toBe('downRight');
+    expect(inputForKey('C')).toBe('downRight');
+  });
+
   it('returns undefined for non-movement keys', () => {
     expect(inputForKey('x')).toBeUndefined();
     expect(inputForKey('Enter')).toBeUndefined();

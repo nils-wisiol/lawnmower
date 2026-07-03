@@ -8,7 +8,7 @@
 
 import { gardenSprites } from './gardenSprites.ts';
 import type { Sprite } from './sprite.ts';
-import type { InputDirection } from '../model/index.ts';
+import type { Facing } from '../model/index.ts';
 
 /** The pixel-art assets a theme draws over its base fills (lawnmower.md §3). */
 export interface ThemeSprites {
@@ -34,8 +34,8 @@ export interface ThemeSprites {
   readonly lawnFountain: Sprite;
   /** Fallback obstacle pool for cells with no decor (hand-authored levels), picked by hash. */
   readonly obstacles: readonly Sprite[];
-  /** The mower, one sprite per heading so it faces the way it last moved. */
-  readonly mower: Record<InputDirection, Sprite>;
+  /** The mower, one sprite per cardinal heading so it faces the way it last moved. */
+  readonly mower: Record<Facing, Sprite>;
 }
 
 /**

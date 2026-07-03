@@ -15,7 +15,10 @@ const DELTA: Record<SquareDirection, { dx: number; dy: number }> = {
   W: { dx: -1, dy: 0 },
 };
 
-const INPUT_TO_DIRECTION: Record<InputDirection, SquareDirection> = {
+// Only the four cardinal intents map on a square grid; the hex-only diagonals
+// (upLeft/…) never resolve to a direction here, so square play simply ignores them
+// (hexagonal.md §2.2) and stays byte-for-byte unchanged when the intent set widens.
+const INPUT_TO_DIRECTION: Partial<Record<InputDirection, SquareDirection>> = {
   up: 'N',
   down: 'S',
   left: 'W',
@@ -73,7 +76,7 @@ export class SquareGrid implements Topology {
     return this.inBounds(nx, ny) ? cellId(nx, ny) : undefined;
   }
 
-  directionForInput(input: InputDirection): Direction {
+  directionForInput(input: InputDirection): Direction | undefined {
     return INPUT_TO_DIRECTION[input];
   }
 
