@@ -100,6 +100,47 @@ describe('spriteForCell (decor-driven obstacles)', () => {
   });
 });
 
+// Fountains: a fountain in a pond (water-fountain) and one on the lawn (lawn-fountain)
+// draw their own art, and a water fountain still counts as water for the shoreline so a
+// body doesn't get a hole banked around it.
+describe('spriteForCell (fountains)', () => {
+  const t = gardenTheme;
+
+  it('draws the water-fountain and lawn-fountain art from their decor', () => {
+    const base = levelFromAscii('##\n.S');
+    const level: Level = {
+      ...base,
+      decor: new Map<CellId, Decor>([
+        ['0,0', 'water-fountain'],
+        ['1,0', 'lawn-fountain'],
+      ]),
+    };
+    expect(spriteForCell(t, level, '0,0', false)).toBe(t.sprites.waterFountain);
+    expect(spriteForCell(t, level, '1,0', false)).toBe(t.sprites.lawnFountain);
+  });
+
+  it('a water fountain counts as water for a neighbouring cell’s shoreline', () => {
+    // Centre water cell '1,1' with a water fountain to its N and plain water to its S:
+    // both count as water, so the tile banks on N and S (mask N|S), grass E/W.
+    //   .F.
+    //   .#.
+    //   .#.
+    //   S..
+    const base = levelFromAscii('.#.\n.#.\n.#.\nS..');
+    const level: Level = {
+      ...base,
+      decor: new Map<CellId, Decor>([
+        ['1,0', 'water-fountain'],
+        ['1,1', 'water'],
+        ['1,2', 'water'],
+      ]),
+    };
+    expect(spriteForCell(t, level, '1,1', false)).toBe(
+      t.sprites.water[WATER_EDGE.N | WATER_EDGE.S],
+    );
+  });
+});
+
 // A water cell picks the tile that banks onto the lawn on its land sides: the renderer
 // masks in which orthogonal neighbours are also water (WATER_EDGE) and indexes the
 // water tile set with it, so shorelines and corners line up with the body's shape.

@@ -99,6 +99,16 @@ const WATER_GROWTH_PROBABILITY = 0.5;
 /** Of the non-water obstacles, the share drawn as trees; the rest are flowers. */
 const TREE_FRACTION = 0.6;
 
+/**
+ * Fountains are rare focal features (lawnmower.md §3), not scattered everywhere. A
+ * water fountain only replaces an *interior* water tile (one surrounded by water on
+ * all four sides), so it reads as standing in a pond and — counting as water for the
+ * shoreline — never punches a hole in the bank. A lawn fountain occasionally stands
+ * in for a plant. Both are purely cosmetic decor.
+ */
+const WATER_FOUNTAIN_PROBABILITY = 0.2;
+const LAWN_FOUNTAIN_PROBABILITY = 0.05;
+
 /** Orthogonal neighbours of `cell` that lie within `within`. */
 function neighboursIn(topology: Topology, cell: CellId, within: ReadonlySet<CellId>): CellId[] {
   const result: CellId[] = [];
@@ -153,6 +163,22 @@ function assignDecor(
   for (const cell of obstacles) {
     if (water.has(cell)) decor.set(cell, 'water');
     else decor.set(cell, rng.next() < TREE_FRACTION ? 'tree' : 'flower');
+  }
+
+  // Fountain pass (rare focal features). Water fountains only take interior water
+  // tiles — all four neighbours water — so they stay embedded in a body and, still
+  // counting as water, don't break its shoreline. Lawn fountains stand in for a plant.
+  for (const cell of obstacles) {
+    const kind = decor.get(cell);
+    if (
+      kind === 'water' &&
+      neighboursIn(topology, cell, water).length === topology.directions.length &&
+      rng.next() < WATER_FOUNTAIN_PROBABILITY
+    ) {
+      decor.set(cell, 'water-fountain');
+    } else if ((kind === 'tree' || kind === 'flower') && rng.next() < LAWN_FOUNTAIN_PROBABILITY) {
+      decor.set(cell, 'lawn-fountain');
+    }
   }
   return decor;
 }

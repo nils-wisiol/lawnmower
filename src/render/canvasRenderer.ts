@@ -9,6 +9,7 @@ import {
   traitsOf,
   type CellId,
   type CellTraits,
+  type Decor,
   type Level,
 } from '../model/index.ts';
 import type { FailReason, GameState, InputDirection } from '../model/index.ts';
@@ -112,13 +113,18 @@ export function cellFill(theme: Theme, traits: CellTraits, mowed: boolean): stri
  * Directions the geometry doesn't name in WATER_EDGE (e.g. a future hex grid) are
  * simply skipped — those bodies fall back to the full interior tile.
  */
+/** Wet cells — plain water or a fountain standing in water — for shoreline purposes. */
+function isWater(decor: Decor | undefined): boolean {
+  return decor === 'water' || decor === 'water-fountain';
+}
+
 function waterEdgeMask(level: Level, cell: CellId): number {
   let mask = 0;
   for (const dir of level.topology.directions) {
     const bit = (WATER_EDGE as Record<string, number>)[dir];
     if (bit === undefined) continue;
     const n = level.topology.neighbor(cell, dir);
-    if (n !== undefined && decorOf(level, n) === 'water') mask |= bit;
+    if (n !== undefined && isWater(decorOf(level, n))) mask |= bit;
   }
   return mask;
 }
@@ -127,6 +133,10 @@ function obstacleSprite(theme: Theme, level: Level, cell: CellId): Sprite | unde
   switch (decorOf(level, cell)) {
     case 'water':
       return theme.sprites.water[waterEdgeMask(level, cell)];
+    case 'water-fountain':
+      return theme.sprites.waterFountain;
+    case 'lawn-fountain':
+      return theme.sprites.lawnFountain;
     case 'tree':
       return variantFor(theme.sprites.trees, cell);
     case 'flower':

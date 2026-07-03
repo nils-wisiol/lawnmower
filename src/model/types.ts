@@ -52,7 +52,9 @@ export interface CellPoint {
 export type Decor =
   | 'water' // part of a lake/pond body
   | 'tree' // a tree on a grassy patch
-  | 'flower'; // a flower on a grassy patch
+  | 'flower' // a flower on a grassy patch
+  | 'water-fountain' // a fountain standing in a water body (counts as water for edges)
+  | 'lawn-fountain'; // a fountain on a grassy patch
 
 /**
  * The central abstraction (lawnmower.md §5): cells, adjacency, a direction set,
