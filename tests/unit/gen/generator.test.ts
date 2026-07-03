@@ -263,6 +263,26 @@ describe('generate — water forms connected bodies (not uniform noise)', () => 
       expect(decorOf(a, cell)).toBe(decorOf(b, cell));
     }
   });
+
+  // The clustering is topology-generic, so it must yield connected water bodies on hex
+  // too (hexagonal.md H4) — the precondition for the six-edge hex shoreline tiles to be
+  // well-defined. Uses the same geometry-blind body helpers above.
+  it('grows connected water bodies on a hex board (no lone hex puddles)', () => {
+    let waterSeen = 0;
+    let biggest = 0;
+    for (const seed of SEEDS) {
+      const { level } = generate({ ...BASE, seed, shape: 'hex' });
+      for (const cell of waterCells(level)) {
+        // Every hex water cell touches another wet hex — bodies of ≥2, as on square.
+        expect(waterNeighbours(level, cell).length).toBeGreaterThan(0);
+      }
+      const sizes = bodySizes(level);
+      waterSeen += sizes.reduce((a, b) => a + b, 0);
+      if (sizes.length > 0) biggest = Math.max(biggest, sizes[0]);
+    }
+    expect(waterSeen).toBeGreaterThan(0); // the feature is live on hex
+    expect(biggest).toBeGreaterThanOrEqual(3); // and grows past a single pair
+  });
 });
 
 describe('generate — coverage floor', () => {

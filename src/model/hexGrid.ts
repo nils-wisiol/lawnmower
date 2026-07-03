@@ -66,6 +66,16 @@ function offsetToAxial(col: number, row: number): { q: number; r: number } {
 }
 
 /**
+ * The cell id at odd-q offset column/row — the same id `HexGrid` mints for that
+ * position. Lets an authoring helper (hexAscii) address a hex board by a plain
+ * rectangular (col, row) grid without importing the axial encoding.
+ */
+export function offsetCellId(col: number, row: number): CellId {
+  const { q, r } = offsetToAxial(col, row);
+  return hexCellId(q, r);
+}
+
+/**
  * Round fractional axial coordinates to the nearest hex (cube rounding): round each of
  * the three cube coordinates, then fix up whichever drifted most so q + r + s == 0.
  */

@@ -14,7 +14,6 @@ import {
 } from '../model/index.ts';
 import type { Facing, FailReason, GameState } from '../model/index.ts';
 import { drawSprite, variantFor, type Sprite } from './sprite.ts';
-import { WATER_EDGE } from './gardenSprites.ts';
 import type { Theme } from './theme.ts';
 
 export interface RendererOptions {
@@ -107,32 +106,30 @@ export function cellFill(theme: Theme, traits: CellTraits, mowed: boolean): stri
  * hashed obstacle pool, preserving the pre-decor look. Tree/flower variety is picked
  * per-cell so a lawn looks the same on every redraw.
  */
-/**
- * Bitmask (WATER_EDGE) of which of `cell`'s orthogonal neighbours are also water, so
- * the renderer can pick the water tile that banks onto the lawn on its land sides.
- * Directions the geometry doesn't name in WATER_EDGE (e.g. a future hex grid) are
- * simply skipped — those bodies fall back to the full interior tile.
- */
 /** Wet cells — plain water or a fountain standing in water — for shoreline purposes. */
 function isWater(decor: Decor | undefined): boolean {
   return decor === 'water' || decor === 'water-fountain';
 }
 
-function waterEdgeMask(level: Level, cell: CellId): number {
-  let mask = 0;
+/**
+ * The directions in which `cell` borders a water neighbour — geometry-blind: it walks
+ * the topology's own `directions`, so it names square cardinals or hex directions alike.
+ * `theme.sprites.waterSprite` turns this set (plus the vocabulary) into the tile that
+ * banks onto the lawn on the land sides, square or hex (hexagonal.md H4).
+ */
+function waterDirs(level: Level, cell: CellId): Set<string> {
+  const dirs = new Set<string>();
   for (const dir of level.topology.directions) {
-    const bit = (WATER_EDGE as Record<string, number>)[dir];
-    if (bit === undefined) continue;
     const n = level.topology.neighbor(cell, dir);
-    if (n !== undefined && isWater(decorOf(level, n))) mask |= bit;
+    if (n !== undefined && isWater(decorOf(level, n))) dirs.add(dir);
   }
-  return mask;
+  return dirs;
 }
 
 function obstacleSprite(theme: Theme, level: Level, cell: CellId): Sprite | undefined {
   switch (decorOf(level, cell)) {
     case 'water':
-      return theme.sprites.water[waterEdgeMask(level, cell)];
+      return theme.sprites.waterSprite(level.topology.directions, waterDirs(level, cell));
     case 'water-fountain':
       return theme.sprites.waterFountain;
     case 'lawn-fountain':
