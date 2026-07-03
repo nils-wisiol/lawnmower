@@ -25,7 +25,22 @@ describe('cellFill (trait-driven colouring)', () => {
     expect(mowed).toBe(t.grassMowed);
     expect(unmowed).not.toBe(mowed);
   });
+
+  // Intuition: a freshly mown stripe is the *brighter* green, uncut grass the
+  // darker/overgrown one. Locked so the two aren't accidentally swapped back.
+  it('mowed grass reads brighter than unmowed grass', () => {
+    expect(luminance(t.grassMowed)).toBeGreaterThan(luminance(t.grassUnmowed));
+  });
 });
+
+/** Perceptual (Rec. 709) luminance of a #rrggbb colour, for brightness comparisons. */
+function luminance(hex: string): number {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 0xff;
+  const g = (n >> 8) & 0xff;
+  const b = n & 0xff;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
 
 // The board must fit the screen width on narrow phones: cells shrink so the whole
 // grid stays within the available width, and never upscale past the desired size.
