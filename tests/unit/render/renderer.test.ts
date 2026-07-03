@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cellFill } from '../../../src/render/canvasRenderer.ts';
+import { cellFill, fitCellSize } from '../../../src/render/canvasRenderer.ts';
 import { gardenTheme } from '../../../src/render/theme.ts';
 
 // The renderer colours a cell from its *traits* + mow state (mirroring the
@@ -24,5 +24,31 @@ describe('cellFill (trait-driven colouring)', () => {
     expect(unmowed).toBe(t.grassUnmowed);
     expect(mowed).toBe(t.grassMowed);
     expect(unmowed).not.toBe(mowed);
+  });
+});
+
+// The board must fit the screen width on narrow phones: cells shrink so the whole
+// grid stays within the available width, and never upscale past the desired size.
+describe('fitCellSize (board fits the viewport width)', () => {
+  it('uses the desired size when no maxWidth is given', () => {
+    expect(fitCellSize(12, { cellSize: 48 })).toBe(48);
+    expect(fitCellSize(20)).toBe(48); // DEFAULT_CELL_SIZE
+  });
+
+  it('shrinks cells so a wide board fits a narrow screen', () => {
+    const cols = 12;
+    const maxWidth = 360;
+    const size = fitCellSize(cols, { cellSize: 48, maxWidth });
+    expect(size).toBeLessThan(48);
+    expect(cols * size).toBeLessThanOrEqual(maxWidth);
+    expect(size).toBeGreaterThan(0);
+  });
+
+  it('never upscales past the desired size when there is room to spare', () => {
+    expect(fitCellSize(4, { cellSize: 48, maxWidth: 4000 })).toBe(48);
+  });
+
+  it('is a no-op for a degenerate (zero-column) board', () => {
+    expect(fitCellSize(0, { cellSize: 48, maxWidth: 100 })).toBe(48);
   });
 });

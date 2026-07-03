@@ -8,10 +8,16 @@ import type { FailReason, GameState } from '../model/index.ts';
 import type { Theme } from './theme.ts';
 
 export interface RendererOptions {
-  /** Edge length of one cell in CSS pixels. */
+  /** Edge length of one cell in CSS pixels (the desired size before any fit shrink). */
   readonly cellSize?: number;
   /** Gap between cells (drawn as grid lines), in CSS pixels. */
   readonly gap?: number;
+  /**
+   * Maximum board width in CSS pixels. When set, cells shrink (never grow) so the
+   * whole board fits within it — this is what keeps a wide lawn on-screen on a
+   * narrow phone (lawnmower.md §3) instead of overflowing the viewport.
+   */
+  readonly maxWidth?: number;
 }
 
 /** Timing/scoring overlay data the board draws on top of the level (M4). */
@@ -31,6 +37,22 @@ const DANGER_THRESHOLD_MS = 5000;
 
 const DEFAULT_CELL_SIZE = 48;
 const DEFAULT_GAP = 2;
+
+/**
+ * Pick a cell edge length that keeps `cols` cells within `maxWidth` CSS pixels,
+ * never upscaling past the desired size. With no `maxWidth` (or no cells) the
+ * desired size is used unchanged. Exported as a pure function so the fit rule is
+ * unit-testable without a canvas — it is what makes a wide board fit a phone.
+ */
+export function fitCellSize(
+  cols: number,
+  options: { readonly cellSize?: number; readonly maxWidth?: number } = {},
+): number {
+  const desired = options.cellSize ?? DEFAULT_CELL_SIZE;
+  if (options.maxWidth === undefined || cols <= 0) return desired;
+  const fit = Math.floor(options.maxWidth / cols);
+  return Math.min(desired, Math.max(1, fit));
+}
 
 /**
  * Pick a cell's fill from its traits and mow state — the visual mirror of the
@@ -80,11 +102,11 @@ export class CanvasRenderer {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('2D canvas context unavailable');
     this.ctx = ctx;
-    this.cellSize = options.cellSize ?? DEFAULT_CELL_SIZE;
     this.gap = options.gap ?? DEFAULT_GAP;
 
     const { minX, minY, cols, rows } = bounds(level);
     this.origin = { minX, minY };
+    this.cellSize = fitCellSize(cols, options);
 
     const cssWidth = cols * this.cellSize;
     const cssHeight = rows * this.cellSize;

@@ -9,7 +9,7 @@
 
 import { attachKeyboard } from '../input/keyboard.ts';
 import { attachSwipe } from '../input/swipe.ts';
-import { formatTime, systemClock, type Clock } from '../model/index.ts';
+import { formatTime, systemClock, type Clock, type Level } from '../model/index.ts';
 import { CanvasRenderer, type RenderHud, type RendererOptions } from '../render/canvasRenderer.ts';
 import { gardenTheme, type Theme } from '../render/theme.ts';
 import { createControls } from './controls.ts';
@@ -17,6 +17,9 @@ import { levelFromCode, type CodedLevel } from './defaultLevel.ts';
 import { syncLevelHash, type HistoryLike } from './levelUrl.ts';
 import { GameSession } from './session.ts';
 import { browserStore, type LevelStore } from './storage.ts';
+
+/** Breathing room (CSS px) kept between the board and the viewport edges. */
+const BOARD_MARGIN = 16;
 
 export interface GameAppOptions {
   readonly theme?: Theme;
@@ -111,9 +114,20 @@ export function mountGame(
   // level it is handed.
   const session = new GameSession(initial.level, { clock });
 
+  // The board never grows wider than the viewport (minus a small margin) so it
+  // fits narrow phone screens; an explicit maxWidth in options.renderer (tests)
+  // still wins. Undefined outside a DOM environment.
+  const boardMaxWidth = (): number | undefined => {
+    if (typeof window === 'undefined') return undefined;
+    const w = window.innerWidth || document.documentElement.clientWidth;
+    return w > 0 ? Math.max(1, w - BOARD_MARGIN) : undefined;
+  };
+  const makeRenderer = (level: Level): CanvasRenderer =>
+    new CanvasRenderer(canvas, theme, level, { maxWidth: boardMaxWidth(), ...options.renderer });
+
   // The renderer sizes the canvas to a specific level on construction, so a
   // next-level jump (which may change grid dimensions) rebuilds it.
-  let renderer = new CanvasRenderer(canvas, theme, session.level, options.renderer);
+  let renderer = makeRenderer(session.level);
   let renderedLevel = session.level;
 
   const hud = (): RenderHud => ({
@@ -125,7 +139,7 @@ export function mountGame(
 
   const draw = (): void => {
     if (session.level !== renderedLevel) {
-      renderer = new CanvasRenderer(canvas, theme, session.level, options.renderer);
+      renderer = makeRenderer(session.level);
       renderedLevel = session.level;
     }
     renderer.render(session.state, hud());
@@ -225,6 +239,16 @@ export function mountGame(
   // with no input (the timer never pauses — §2). Guarded so importing the app in a
   // non-DOM/test environment (no requestAnimationFrame) is inert; timing there is
   // driven synchronously through session.move/tick instead.
+  // Refit the board when the viewport changes (rotation, window resize) so it keeps
+  // fitting the screen width — rebuild the renderer at the new size and redraw.
+  const onResize = (): void => {
+    renderer = makeRenderer(session.level);
+    renderedLevel = session.level;
+    draw();
+  };
+  const hasWindow = typeof window !== 'undefined';
+  if (hasWindow) window.addEventListener('resize', onResize);
+
   const hasRaf = typeof requestAnimationFrame === 'function';
   let frame = 0;
   const tick = (): void => {
@@ -249,6 +273,7 @@ export function mountGame(
     destroy: () => {
       detachKeyboard();
       detachSwipe();
+      if (hasWindow) window.removeEventListener('resize', onResize);
       if (hasRaf) cancelAnimationFrame(frame);
     },
   };
