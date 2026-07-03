@@ -105,6 +105,8 @@ export function mountGame(
 
   const controls = createControls({
     onLoadCode: (code) => loadCode(code),
+    // On-screen equivalent of the N key: hand out a fresh lawn.
+    onNext: () => loadNextLawn(),
     shareUrl: () => (typeof location !== 'undefined' ? location.href : ''),
   });
   container.appendChild(controls.element);
