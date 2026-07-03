@@ -1,13 +1,43 @@
-// Test-only brute-force solver: finds a winning sequence of inputs for a level by
-// DFS over game states, backtracking on blocked/lost moves. Because `move` is pure
-// and returns fresh state, backtracking is just "don't keep the branch". Used to
-// verify the demo level is solvable and to drive the e2e playthrough with a real,
-// discovered solution (no hand-routed, possibly-wrong key list).
+// Test-only solving helpers. `findSolution` brute-forces a winning input sequence
+// by DFS over game states (used to prove the small demo level solvable); because
+// `move` is pure, backtracking is just "don't keep the branch". `walkToInputs`
+// turns a generator walk into the inputs that replay it — cheap where brute force
+// would explode, and what drives the e2e playthrough of the generated level.
 
-import { createGame, move, type InputDirection, type Level } from '../../src/model/index.ts';
+import {
+  createGame,
+  move,
+  type CellId,
+  type InputDirection,
+  type Level,
+} from '../../src/model/index.ts';
 import type { GameState } from '../../src/model/index.ts';
 
 const INPUTS: readonly InputDirection[] = ['up', 'down', 'left', 'right'];
+
+/**
+ * Convert a self-avoiding walk (consecutive cells) into the input sequence that
+ * walks it. Geometry-agnostic: for each step it asks the model which input reaches
+ * the next cell, so it works for any Topology. The generator's walk is a perfect
+ * mow, so the returned inputs drive the level to a win.
+ */
+export function walkToInputs(level: Level, walk: readonly CellId[]): InputDirection[] {
+  let state = createGame(level);
+  const inputs: InputDirection[] = [];
+  for (let i = 1; i < walk.length; i++) {
+    const target = walk[i];
+    const input = INPUTS.find((candidate) => {
+      const result = move(state, candidate);
+      return result.state.position === target && result.outcome !== 'lost';
+    });
+    if (input === undefined) {
+      throw new Error(`Walk step ${i} to "${target}" is unreachable by any input`);
+    }
+    inputs.push(input);
+    state = move(state, input).state;
+  }
+  return inputs;
+}
 
 /** Return a winning input sequence for `level`, or undefined if none exists. */
 export function findSolution(level: Level): InputDirection[] | undefined {
