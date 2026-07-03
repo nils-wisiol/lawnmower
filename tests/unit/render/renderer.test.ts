@@ -7,6 +7,7 @@ import {
   spriteForCell,
 } from '../../../src/render/canvasRenderer.ts';
 import { gardenTheme } from '../../../src/render/theme.ts';
+import { WATER_EDGE } from '../../../src/render/gardenSprites.ts';
 import {
   createGame,
   levelFromAscii,
@@ -93,9 +94,42 @@ describe('spriteForCell (decor-driven obstacles)', () => {
   const level: Level = { ...base, decor };
 
   it('draws water / tree / flower art from the cell decor', () => {
-    expect(spriteForCell(t, level, '0,0', false)).toBe(t.sprites.water);
+    expect(t.sprites.water).toContain(spriteForCell(t, level, '0,0', false));
     expect(t.sprites.trees).toContain(spriteForCell(t, level, '1,0', false));
     expect(t.sprites.flowers).toContain(spriteForCell(t, level, '2,0', false));
+  });
+});
+
+// A water cell picks the tile that banks onto the lawn on its land sides: the renderer
+// masks in which orthogonal neighbours are also water (WATER_EDGE) and indexes the
+// water tile set with it, so shorelines and corners line up with the body's shape.
+describe('spriteForCell (water edge tiles follow the body shape)', () => {
+  const t = gardenTheme;
+  // A vertical 1x3 water body in the middle column; grass either side + the start.
+  //   .#.
+  //   .#.
+  //   .#.
+  //   S..
+  const base = levelFromAscii('.#.\n.#.\n.#.\nS..');
+  const decor = new Map<CellId, Decor>([
+    ['1,0', 'water'],
+    ['1,1', 'water'],
+    ['1,2', 'water'],
+  ]);
+  const level: Level = { ...base, decor };
+
+  it('the middle of the body has water above and below (N|S), grass left/right', () => {
+    expect(spriteForCell(t, level, '1,1', false)).toBe(
+      t.sprites.water[WATER_EDGE.N | WATER_EDGE.S],
+    );
+  });
+
+  it('the top of the body banks only to the south (its only water neighbour)', () => {
+    expect(spriteForCell(t, level, '1,0', false)).toBe(t.sprites.water[WATER_EDGE.S]);
+  });
+
+  it('the bottom of the body banks only to the north', () => {
+    expect(spriteForCell(t, level, '1,2', false)).toBe(t.sprites.water[WATER_EDGE.N]);
   });
 });
 

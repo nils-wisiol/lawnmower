@@ -60,14 +60,44 @@ function pathTile(): Sprite {
   });
 }
 
-/** A lake obstacle: blue water with banded ripples and sparkle highlights. */
-function lakeTile(): Sprite {
-  return buildTile(['#3f6f9e', '#35608f', '#6ea3d6'], (x, y) => {
-    const n = noise(x, y, 7);
-    if (n > 0.9) return 3; // sparkle
-    // Gentle horizontal ripple bands, offset per row for a watery feel.
-    if ((y + Math.floor(noise(0, y, 2) * 3)) % 4 === 0) return 2;
-    return 1;
+const WATER_COLORS: readonly string[] = ['#3f6f9e', '#35608f', '#6ea3d6']; // base, ripple, sparkle
+
+/** Water colour index for a pixel: base, banded ripples, occasional sparkle. */
+function waterPixel(x: number, y: number): number {
+  const n = noise(x, y, 7);
+  if (n > 0.9) return 3; // sparkle
+  // Gentle horizontal ripple bands, offset per row for a watery feel.
+  if ((y + Math.floor(noise(0, y, 2) * 3)) % 4 === 0) return 2;
+  return 1;
+}
+
+/**
+ * Which orthogonal neighbour is water, as bit flags (lawnmower.md §3). A water cell's
+ * tile is chosen by OR-ing these for its water neighbours; the shared convention lets
+ * the generator/renderer and the tile art agree on what each of the 16 variants means.
+ */
+export const WATER_EDGE = { N: 1, E: 2, S: 4, W: 8 } as const;
+
+/** Green margin, in px, left on a water tile's land-facing (non-water) sides. */
+const WATER_MARGIN = 2;
+
+/**
+ * One of the 16 water tiles, selected by a bitmask of which sides border water
+ * (WATER_EDGE). Each side *without* water gets a strip of grass margin, so a body's
+ * edges and corners read as banked shoreline against the lawn rather than a hard blue
+ * square. Mask 15 (surrounded by water) is a full interior tile with no margin.
+ */
+function waterTile(mask: number): Sprite {
+  const landN = (mask & WATER_EDGE.N) === 0;
+  const landE = (mask & WATER_EDGE.E) === 0;
+  const landS = (mask & WATER_EDGE.S) === 0;
+  const landW = (mask & WATER_EDGE.W) === 0;
+  return overlayShape(grassTile(6), WATER_COLORS, (x, y) => {
+    if (landN && y < WATER_MARGIN) return 0; // keep grass margin on a land side
+    if (landS && y >= TILE - WATER_MARGIN) return 0;
+    if (landW && x < WATER_MARGIN) return 0;
+    if (landE && x >= TILE - WATER_MARGIN) return 0;
+    return waterPixel(x, y);
   });
 }
 
@@ -205,13 +235,16 @@ const tree = overlay(soilDisc(4), [
 
 // Water/tree/flower are exposed as named sets so the renderer can map a cell's
 // decor (lawnmower.md §3) to the right art, rather than picking blindly by hash.
-const water = lakeTile();
+// `water` is indexed by a WATER_EDGE bitmask of which neighbours are water, so a
+// body's edges/corners bank onto the lawn; index 15 is the full interior tile.
+const water: readonly Sprite[] = Array.from({ length: 16 }, (_, mask) => waterTile(mask));
 const trees: readonly Sprite[] = [tree];
 const flowers: readonly Sprite[] = [flower];
 
 // Fallback pool for obstacle cells that carry no decor (hand-authored/ascii levels):
-// the old blind per-cell hash pick, preserving their original look.
-const obstacles: readonly Sprite[] = [water, flower, tree];
+// the old blind per-cell hash pick, preserving their original look. Uses the full
+// water tile as the lake representative.
+const obstacles: readonly Sprite[] = [water[15], flower, tree];
 
 // --- Mower (authored facing up, rotated for the other three headings) -------
 // prettier-ignore
