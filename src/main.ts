@@ -5,11 +5,17 @@
 // so importing this module in a non-DOM (node/test) environment does nothing.
 
 import { mountGame } from './game/app.ts';
-import { bootLevel, randomLevel } from './game/defaultLevel.ts';
+import { bootLevel, fitLevelSize, randomLevel } from './game/defaultLevel.ts';
 
 export function bootstrap(container: HTMLElement): void {
   const hash = typeof location !== 'undefined' ? location.hash : '';
-  mountGame(container, bootLevel(hash), { nextLevel: randomLevel });
+  // Size the default and "next" lawns to the screen: portrait phones get a taller
+  // lawn, wide screens a wider one, clamped so a desktop never gets a huge level.
+  const size =
+    typeof window !== 'undefined'
+      ? fitLevelSize({ width: window.innerWidth, height: window.innerHeight })
+      : undefined;
+  mountGame(container, bootLevel(hash, size), { nextLevel: () => randomLevel(size) });
 }
 
 if (typeof document !== 'undefined') {

@@ -27,7 +27,7 @@ const { level, walk } = generate(decodeShortForm(DEFAULT_LEVEL_CODE));
 test('plays the generated default level to a win with arrow keys', async ({ page }) => {
   const inputs = walkToInputs(level, walk);
 
-  await page.goto('/');
+  await page.goto(`/#${DEFAULT_LEVEL_CODE}`);
   const game = page.locator('#game');
   await expect(game).toHaveAttribute('data-status', 'playing');
 
@@ -43,7 +43,7 @@ test('re-mowing a tile crashes, and R restarts', async ({ page }) => {
   const inputs = walkToInputs(level, walk);
   const first = inputs[0];
 
-  await page.goto('/');
+  await page.goto(`/#${DEFAULT_LEVEL_CODE}`);
   const game = page.locator('#game');
 
   // Start is mowed on load; step to the first walk cell, then reverse straight

@@ -4,6 +4,7 @@ import {
   DEFAULT_LEVEL_CODE,
   bootLevel,
   defaultCodedLevel,
+  fitLevelSize,
   levelFromCode,
   randomLevel,
 } from '../../../src/game/defaultLevel.ts';
@@ -45,6 +46,30 @@ describe('bootLevel — choosing the level to boot from a hash', () => {
 
   it('falls back to the default when a hash code is unusable', () => {
     expect(bootLevel('#garbage').code).toBe(DEFAULT_LEVEL_CODE);
+  });
+});
+
+describe('fitLevelSize — level proportions follow the screen', () => {
+  it('gives a portrait phone a taller-than-wide lawn', () => {
+    const size = fitLevelSize({ width: 390, height: 844 });
+    expect(size.height).toBeGreaterThan(size.width);
+  });
+
+  it('gives a landscape screen a wider-than-tall lawn', () => {
+    const size = fitLevelSize({ width: 1024, height: 600 });
+    expect(size.width).toBeGreaterThan(size.height);
+  });
+
+  it('does not grow into a superlarge lawn on a big desktop (clamped)', () => {
+    const size = fitLevelSize({ width: 3840, height: 2160 });
+    expect(size.width).toBeLessThanOrEqual(14);
+    expect(size.height).toBeLessThanOrEqual(12);
+  });
+
+  it('stays playable on a tiny screen (clamped to a floor)', () => {
+    const size = fitLevelSize({ width: 240, height: 320 });
+    expect(size.width).toBeGreaterThanOrEqual(6);
+    expect(size.height).toBeGreaterThanOrEqual(6);
   });
 });
 

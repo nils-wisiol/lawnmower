@@ -19,7 +19,7 @@ const { level, walk } = generate(decodeShortForm(DEFAULT_LEVEL_CODE));
 test('records a completion time on win and advances to the next level', async ({ page }) => {
   const inputs = walkToInputs(level, walk);
 
-  await page.goto('/');
+  await page.goto(`/#${DEFAULT_LEVEL_CODE}`);
   const game = page.locator('#game');
   const status = page.locator('.status');
 
@@ -42,7 +42,7 @@ test('records a completion time on win and advances to the next level', async ({
 test('R replays the same level after a win', async ({ page }) => {
   const inputs = walkToInputs(level, walk);
 
-  await page.goto('/');
+  await page.goto(`/#${DEFAULT_LEVEL_CODE}`);
   const game = page.locator('#game');
 
   for (const input of inputs) {
