@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   levelHash,
+  pushLevelHash,
   readLevelCode,
   syncLevelHash,
   type HistoryLike,
@@ -38,9 +39,16 @@ describe('levelUrl — building & syncing the hash', () => {
   });
 
   it('syncs via replaceState so no back-button history is added', () => {
-    const replaceState = vi.fn();
-    const history: HistoryLike = { replaceState };
+    const history: HistoryLike = { replaceState: vi.fn(), pushState: vi.fn() };
     syncLevelHash(history, '1.42.10x8.70');
-    expect(replaceState).toHaveBeenCalledWith(null, '', '#1.42.10x8.70');
+    expect(history.replaceState).toHaveBeenCalledWith(null, '', '#1.42.10x8.70');
+    expect(history.pushState).not.toHaveBeenCalled();
+  });
+
+  it('pushes a back-button entry via pushState when moving to a new level', () => {
+    const history: HistoryLike = { replaceState: vi.fn(), pushState: vi.fn() };
+    pushLevelHash(history, '1.42.10x8.70');
+    expect(history.pushState).toHaveBeenCalledWith(null, '', '#1.42.10x8.70');
+    expect(history.replaceState).not.toHaveBeenCalled();
   });
 });
