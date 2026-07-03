@@ -28,6 +28,10 @@ export interface ThemeSprites {
   readonly trees: readonly Sprite[];
   /** Flower variants, picked per-cell for the 'flower' decor. */
   readonly flowers: readonly Sprite[];
+  /** A fountain standing in a water body, for the 'water-fountain' decor. */
+  readonly waterFountain: Sprite;
+  /** A fountain on a grassy patch, for the 'lawn-fountain' decor. */
+  readonly lawnFountain: Sprite;
   /** Fallback obstacle pool for cells with no decor (hand-authored levels), picked by hash. */
   readonly obstacles: readonly Sprite[];
   /** The mower, one sprite per heading so it faces the way it last moved. */

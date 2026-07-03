@@ -96,18 +96,25 @@ describe('generate — gaps become obstacles', () => {
 describe('generate — water forms connected bodies (not uniform noise)', () => {
   const SEEDS = [1, 2, 3, 12345, 999, 42, 7, 100];
 
-  /** Orthogonal water neighbours of `cell`. */
+  // "Wet" = plain water or a fountain standing in water: both form the body and both
+  // count as a shore-neighbour, so a fountain in a pond doesn't read as a hole.
+  const isWet = (level: Level, cell: CellId): boolean => {
+    const d = decorOf(level, cell);
+    return d === 'water' || d === 'water-fountain';
+  };
+
+  /** Orthogonal wet neighbours of `cell`. */
   function waterNeighbours(level: Level, cell: CellId): CellId[] {
     const out: CellId[] = [];
     for (const dir of level.topology.directions) {
       const n = level.topology.neighbor(cell, dir);
-      if (n !== undefined && decorOf(level, n) === 'water') out.push(n);
+      if (n !== undefined && isWet(level, n)) out.push(n);
     }
     return out;
   }
 
   const waterCells = (level: Level): CellId[] =>
-    level.topology.cells.filter((c) => decorOf(level, c) === 'water');
+    level.topology.cells.filter((c) => isWet(level, c));
 
   /** Sizes of the connected (orthogonal) water bodies, largest first. */
   function bodySizes(level: Level): number[] {
@@ -134,14 +141,15 @@ describe('generate — water forms connected bodies (not uniform noise)', () => 
     return sizes.sort((a, b) => b - a);
   }
 
-  it('assigns a water/tree/flower decor to exactly the obstacle cells', () => {
+  it('assigns a garden decor to exactly the obstacle cells', () => {
+    const kinds = ['water', 'tree', 'flower', 'water-fountain', 'lawn-fountain'];
     const { level } = generate(BASE);
     for (const cell of level.topology.cells) {
       const isObstacle = !traitsOf(level, cell).passable;
       const decor = decorOf(level, cell);
       if (isObstacle) {
         expect(decor).toBeDefined();
-        expect(['water', 'tree', 'flower']).toContain(decor);
+        expect(kinds).toContain(decor);
       } else {
         expect(decor).toBeUndefined();
       }
@@ -172,6 +180,35 @@ describe('generate — water forms connected bodies (not uniform noise)', () => 
     }
     expect(biggest).toBeGreaterThanOrEqual(8); // at least one proper lake
     expect(cells / bodies).toBeGreaterThanOrEqual(3); // bodies average ≥3 tiles
+  });
+
+  it('places water fountains only on interior water tiles (surrounded by water)', () => {
+    // A water fountain must be embedded in a body — all four neighbours wet — so it
+    // reads as standing in a pond and never breaks the shoreline.
+    for (const seed of SEEDS) {
+      const { level } = generate({ ...BASE, seed });
+      for (const cell of level.topology.cells) {
+        if (decorOf(level, cell) === 'water-fountain') {
+          expect(waterNeighbours(level, cell).length).toBe(level.topology.directions.length);
+        }
+      }
+    }
+  });
+
+  it('does produce fountains of both kinds across seeds (the feature is live)', () => {
+    // Fountains are rare, so pool across seeds/sizes to reliably see each kind.
+    let water = 0;
+    let lawn = 0;
+    for (const seed of [...SEEDS, 55, 88, 123, 777]) {
+      const { level } = generate({ ...BASE, seed, width: 12, height: 9 });
+      for (const cell of level.topology.cells) {
+        const d = decorOf(level, cell);
+        if (d === 'water-fountain') water++;
+        if (d === 'lawn-fountain') lawn++;
+      }
+    }
+    expect(water).toBeGreaterThan(0);
+    expect(lawn).toBeGreaterThan(0);
   });
 
   it('is reproducible per seed (decor matches cell-for-cell)', () => {

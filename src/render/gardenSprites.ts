@@ -213,8 +213,53 @@ const flower = overlay(soilBed(3), [
 // A tree: leafy green canopy on a trunk, standing on a round soil disc. The disc
 // shows as a brown ring around and below the canopy, so the tile can't be mistaken
 // for plain grass. Trunk is a dark bark brown so it reads against the lighter soil.
+// A daisy: white petals around a yellow eye, on its bed.
 // prettier-ignore
-const tree = overlay(soilDisc(4), [
+const daisy = overlay(soilBed(7), [
+  '................',
+  '................',
+  '......www.......',
+  '.....wwwww......',
+  '.....wwyww......',
+  '.....wwwww......',
+  '......www.......',
+  '.......s........',
+  '......Lss.......',
+  '.......ssL......',
+  '.......s........',
+  '.......s........',
+  '................',
+  '................',
+  '................',
+  '................',
+], { w: '#f2efe6', y: '#f2d64b', s: '#3f6f28', L: '#4c8236' });
+
+// A cluster of bluebells, on its bed.
+// prettier-ignore
+const bluebell = overlay(soilBed(9), [
+  '................',
+  '................',
+  '......bbb.......',
+  '.....bBBBb......',
+  '.....BBBBB......',
+  '......BBB.......',
+  '.......s........',
+  '......Lss.......',
+  '.......ssL......',
+  '......Lss.......',
+  '.......s........',
+  '.......s........',
+  '................',
+  '................',
+  '................',
+  '................',
+], { b: '#c9a6e0', B: '#9a6fc0', s: '#3f6f28', L: '#4c8236' });
+
+// A tree: leafy green canopy on a trunk, standing on a round soil disc. The disc
+// shows as a brown ring around and below the canopy, so the tile can't be mistaken
+// for plain grass. Trunk is a dark bark brown so it reads against the lighter soil.
+// prettier-ignore
+const roundTree = overlay(soilDisc(4), [
   '................',
   '......mmmm......',
   '.....mMMMMm.....',
@@ -233,18 +278,73 @@ const tree = overlay(soilDisc(4), [
   '................',
 ], { m: '#4c8236', M: '#356024', t: '#4a3218' });
 
+// A conifer: a layered triangular canopy — a clearly different silhouette from the
+// round tree — on its soil disc.
+// prettier-ignore
+const pineTree = overlay(soilDisc(8), [
+  '................',
+  '.......P........',
+  '......PPP.......',
+  '......ppp.......',
+  '.....PPPPP......',
+  '.....ppppp......',
+  '....PPPPPPP.....',
+  '....ppppppp.....',
+  '.......tt.......',
+  '.......tt.......',
+  '.......tt.......',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+], { P: '#3a7a3f', p: '#276030', t: '#4a3218' });
+
 // Water/tree/flower are exposed as named sets so the renderer can map a cell's
 // decor (lawnmower.md §3) to the right art, rather than picking blindly by hash.
 // `water` is indexed by a WATER_EDGE bitmask of which neighbours are water, so a
 // body's edges/corners bank onto the lawn; index 15 is the full interior tile.
 const water: readonly Sprite[] = Array.from({ length: 16 }, (_, mask) => waterTile(mask));
-const trees: readonly Sprite[] = [tree];
-const flowers: readonly Sprite[] = [flower];
+const trees: readonly Sprite[] = [roundTree, pineTree];
+const flowers: readonly Sprite[] = [flower, daisy, bluebell];
+
+// Fountains (lawnmower.md §3): a stone basin with a little jet and falling droplets.
+// The same structure sits in a full water tile (a fountain in a pond) or on a soil
+// patch (a fountain on the lawn), so both fountain kinds read as the same feature.
+// prettier-ignore
+const fountainRows = [
+  '................',
+  '.......dd.......',
+  '......d..d......',
+  '.......jj.......',
+  '.......jj.......',
+  '....SSSSSSSS....',
+  '....SWWWWWWS....',
+  '....SWwwwwWS....',
+  '....SWWWWWWS....',
+  '....SSSSSSSS....',
+  '.....ssssss.....',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+const fountainLegend = {
+  d: '#a9d3f0', // droplet
+  j: '#8fc0ea', // jet
+  S: '#c9c2b8', // stone rim (light)
+  s: '#8f887d', // stone base (shadow)
+  W: '#6ea3d6', // basin water (light)
+  w: '#3f6f9e', // basin water (deep)
+};
+const waterFountain = overlay(water[15], fountainRows, fountainLegend);
+const lawnFountain = overlay(soilDisc(2), fountainRows, fountainLegend);
 
 // Fallback pool for obstacle cells that carry no decor (hand-authored/ascii levels):
 // the old blind per-cell hash pick, preserving their original look. Uses the full
 // water tile as the lake representative.
-const obstacles: readonly Sprite[] = [water[15], flower, tree];
+const obstacles: readonly Sprite[] = [water[15], flower, roundTree];
 
 // --- Mower (authored facing up, rotated for the other three headings) -------
 // prettier-ignore
@@ -286,6 +386,8 @@ export const gardenSprites = {
   water,
   trees,
   flowers,
+  waterFountain,
+  lawnFountain,
   obstacles,
   mower,
 } as const;
