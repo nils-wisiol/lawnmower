@@ -237,9 +237,14 @@ Each milestone is a shippable, testable slice; later ones build on earlier.
 - **M4 — Scoring & timing.** Wall-clock timer, optional per-level time limit,
   win screen with time, instant restart / next-level flow. *Done when:* a full
   play loop (start→win→next) works with recorded time.
-- **M5 — Persistence & seed sharing.** In-browser storage (best times,
-  settings, seed history); enter/share a seed; long-form level load.
-  *Done when:* best time survives reload; a shared seed reproduces a level.
+- **M5 — Persistence & seed sharing.** In-browser storage (best times, seed
+  history); enter/share a seed via a **URL hash** that carries the level's
+  short-form code and updates as levels load, so copying the URL shares the exact
+  level. *Long-form level load is **deferred** past M5* — the seeded short-form
+  path covers all v1 levels, and hand-authored maps already load via the ascii
+  helper for tests; full Level↔string long-form serialization lands only when a
+  handcrafted level pack needs it (roadmap, §9 "Content"). *Done when:* best time
+  survives reload; a shared seed reproduces a level.
 - **M6 — UX & art polish.** Onboarding/tutorial level; **Claude-authored
   programmatic pixel-art garden theme** (§3) replacing M2 placeholders via the
   theme layer; mobile swipe input; feedback juice. *Done when:* a first-time

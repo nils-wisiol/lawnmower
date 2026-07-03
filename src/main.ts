@@ -1,14 +1,15 @@
-// Browser entry point (M3). Mounts a generated, solvable-by-construction level
-// (see game/defaultLevel): canvas board, mower, mowed trail, arrow-key input,
-// win/fail states. Guarded so importing this module in a non-DOM (node/test)
-// environment does nothing.
+// Browser entry point (M3; M5 seed sharing). Boots the level named by the URL hash
+// if one is present (a shared link), otherwise the deterministic default level (see
+// game/defaultLevel). Each win hands out a fresh random level, and the app keeps the
+// URL hash in sync so it always names — and can share — the level on screen. Guarded
+// so importing this module in a non-DOM (node/test) environment does nothing.
 
 import { mountGame } from './game/app.ts';
-import { defaultLevel, nextLevel } from './game/defaultLevel.ts';
+import { bootLevel, randomLevel } from './game/defaultLevel.ts';
 
 export function bootstrap(container: HTMLElement): void {
-  // Boot the deterministic default level; each win hands out a fresh random one.
-  mountGame(container, defaultLevel(), { nextLevel });
+  const hash = typeof location !== 'undefined' ? location.hash : '';
+  mountGame(container, bootLevel(hash), { nextLevel: randomLevel });
 }
 
 if (typeof document !== 'undefined') {

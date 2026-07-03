@@ -136,6 +136,16 @@ export class GameSession {
   }
 
   /**
+   * Switch to an arbitrary level and start a fresh game + clock (M5 seed entry:
+   * loading a pasted/shared level code mid-run). Independent of the win-only
+   * next-level factory used by `advance`.
+   */
+  load(level: Level): void {
+    this._level = level;
+    this._state = this.begin(level);
+  }
+
+  /**
    * Continue after a finished run: load the next level after a win (if a factory
    * was given), otherwise just restart the current one. From a loss this is a
    * retry. A no-op while still playing.
