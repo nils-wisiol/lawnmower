@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  HexGrid,
   createGame,
+  hexCellId,
   levelFromAscii,
   move,
+  moveTo,
   remainingMowable,
+  type CellId,
+  type CellTraits,
   type GameState,
   type InputDirection,
+  type Level,
 } from '../../../src/model/index.ts';
 
 /** Drive a sequence of inputs, returning the final result. */
@@ -123,6 +129,82 @@ describe('routing around obstacles', () => {
     const result = play(start, ['right', 'right', 'down', 'down', 'left', 'left', 'up']);
     expect(result.outcome).toBe('won');
     expect(result.state.mowed.size).toBe(8);
+  });
+});
+
+describe('moveTo — cell-driven moves (click/tap-to-move)', () => {
+  const level = levelFromAscii(['S..', '...', '...'].join('\n'));
+
+  it('enters an adjacent cell, applying the same rules as move', () => {
+    const start = createGame(level);
+    const result = moveTo(start, '1,0'); // east neighbour of the start
+    expect(result.outcome).toBe('moved');
+    expect(result.state.position).toBe('1,0');
+    expect(result.state.mowed.has('1,0')).toBe(true);
+  });
+
+  it('rejects a non-neighbour target as blocked, with no state change', () => {
+    const start = createGame(level);
+    const result = moveTo(start, '2,2'); // far corner, not adjacent
+    expect(result.outcome).toBe('blocked');
+    expect(result.state).toBe(start);
+  });
+
+  it('rejects the mower’s own cell (a stray tap can’t re-mow in place)', () => {
+    const start = createGame(level);
+    const result = moveTo(start, start.position);
+    expect(result.outcome).toBe('blocked');
+    expect(result.state).toBe(start);
+  });
+
+  it('hard-fails when the neighbour is an already-mowed grass tile', () => {
+    const start = createGame(level);
+    const east = moveTo(start, '1,0'); // mow (1,0)
+    const back = moveTo(east.state, '0,0'); // back onto the mowed start → fail
+    expect(back.outcome).toBe('lost');
+    expect(back.state.status).toBe('lost');
+  });
+
+  it('does nothing once the game is finished', () => {
+    const start = createGame(level);
+    const lost = moveTo(moveTo(start, '1,0').state, '0,0');
+    expect(lost.state.status).toBe('lost');
+    const after = moveTo(lost.state, '2,0');
+    expect(after.outcome).toBe('blocked');
+    expect(after.state).toBe(lost.state);
+  });
+});
+
+describe('hex level through the unchanged core (via moveTo)', () => {
+  // A 2×2 flat-top hex, all grass. Adjacency (odd-q offset packing) admits the
+  // Hamiltonian path (0,0)→(1,0)→(1,1)→(0,1), and (0,0) is a neighbour of (1,0).
+  const GRASS: CellTraits = { passable: true, mowable: true };
+  function hexLevel(): Level {
+    const topology = new HexGrid(2, 2);
+    const traits = new Map<CellId, CellTraits>();
+    for (const cell of topology.cells) traits.set(cell, GRASS);
+    return { topology, traits, start: hexCellId(0, 0) };
+  }
+
+  it('drives a hardcoded hex level to a win by mowing every tile once', () => {
+    let state = createGame(hexLevel());
+    expect(state.totalMowable).toBe(4);
+    for (const target of [hexCellId(1, 0), hexCellId(1, 1), hexCellId(0, 1)]) {
+      const result = moveTo(state, target);
+      expect(result.outcome === 'moved' || result.outcome === 'won').toBe(true);
+      state = result.state;
+    }
+    expect(state.status).toBe('won');
+    expect(remainingMowable(state)).toEqual([]);
+  });
+
+  it('hard-fails on the same core rule when it revisits a mowed hex tile', () => {
+    let state = createGame(hexLevel());
+    state = moveTo(state, hexCellId(1, 0)).state; // mow (1,0)
+    const back = moveTo(state, hexCellId(0, 0)); // back onto the mowed start
+    expect(back.outcome).toBe('lost');
+    expect(back.state.status).toBe('lost');
+    expect(back.state.position).toBe(hexCellId(0, 0));
   });
 });
 

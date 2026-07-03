@@ -80,4 +80,12 @@ export class SquareGrid implements Topology {
   layout(cell: CellId): CellPoint {
     return coords(cell);
   }
+
+  cellAt(p: CellPoint): CellId | undefined {
+    // Inverse of `layout` (which is the identity on coordinates): round to the
+    // nearest grid cell, then reject points that land off the board.
+    const x = Math.round(p.x);
+    const y = Math.round(p.y);
+    return this.inBounds(x, y) ? cellId(x, y) : undefined;
+  }
 }

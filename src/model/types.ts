@@ -78,6 +78,14 @@ export interface Topology {
   directionForInput(input: InputDirection): Direction | undefined;
   /** Pixel-space layout of a cell, for rendering. */
   layout(cell: CellId): CellPoint;
+  /**
+   * The inverse of `layout`: the cell containing point `p` (in the same cell-unit
+   * space `layout` returns), or undefined if `p` lies outside the board. Each
+   * geometry implements its own point→cell test — square rounds to the grid, hex
+   * does axial rounding — so click/tap-to-move (hexagonal.md §2.6) needs no geometry
+   * knowledge in the app.
+   */
+  cellAt(p: CellPoint): CellId | undefined;
 }
 
 /**
