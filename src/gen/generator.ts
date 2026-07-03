@@ -89,10 +89,13 @@ const RANDOM_STEP_PROBABILITY = 0.15;
 /**
  * Default time budget per step of the perfect mow (lawnmower.md §2 time limit). The
  * generated level's limit scales with its solution length — a bigger lawn gets
- * proportionally more time — at half a second per move the player must make. Time-
+ * proportionally more time — at half a second per move on a square board. Time-
  * limit *sourcing* is an open question (§10); this per-step scaling is the first cut.
+ *
+ * Hex gets double the budget (1s/step): six-way movement with the newer Q/E/Z/C keys
+ * is less familiar than four arrows, so each move takes longer to plan and aim.
  */
-const MS_PER_STEP = 500;
+const MS_PER_STEP: Record<GridShape, number> = { square: 500, hex: 1000 };
 
 /**
  * Water-body generation (lawnmower.md §3). Real ponds are connected, not a uniform
@@ -338,13 +341,13 @@ export function generate(config: GeneratorConfig): GeneratedLevel {
   const decor = assignDecor(topology, obstacleCells, rng);
 
   // Time limit scales with the solution: the perfect mow takes bestWalk.length - 1
-  // moves (the start is mowed for free), budgeted at MS_PER_STEP each.
+  // moves (the start is mowed for free), budgeted at MS_PER_STEP each — double on hex.
   const steps = bestWalk.length - 1;
   const level: Level = {
     topology,
     traits,
     start: bestWalk[0],
-    config: { timerStart: 'firstMove', timeLimitMs: steps * MS_PER_STEP },
+    config: { timerStart: 'firstMove', timeLimitMs: steps * MS_PER_STEP[config.shape ?? 'square'] },
     decor,
   };
   return { level, walk: bestWalk, coverage };
