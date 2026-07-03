@@ -91,14 +91,77 @@ function overlay(base: Sprite, rows: readonly string[], legend: Record<string, s
   return { w: base.w, h: base.h, palette, pixels };
 }
 
+/**
+ * Composite a procedural shape over a base tile: `at(x,y)` returns 0 to keep the
+ * base pixel, or a 1-based index into `colors` to paint that colour. The overlay
+ * sibling to `overlay()` — used for the soil patches, whose round/rectangular masks
+ * are far cleaner as math than as hand-authored char grids.
+ */
+function overlayShape(
+  base: Sprite,
+  colors: readonly string[],
+  at: (x: number, y: number) => number,
+): Sprite {
+  const palette = [...base.palette];
+  const remap = [0, ...colors.map((c) => palette.push(c) - 1)];
+  const pixels = base.pixels.map((bp, i) => {
+    const idx = at(i % TILE, Math.floor(i / TILE));
+    return idx === 0 ? bp : remap[idx];
+  });
+  return { w: base.w, h: base.h, palette, pixels };
+}
+
+// Bare earth under the plants (lawnmower.md §3): trees and flowers were near-
+// invisible as green-on-green, so each sits on a speckled brown soil patch that
+// reads clearly against the lawn — a round patch for trees, a rectangular bed for
+// flowers, so the two are distinguishable at a glance. Both leave a green margin.
+const SOIL: readonly string[] = ['#6b4a2a', '#573a20', '#7d5836']; // base, dark clod, light fleck
+
+/** Soil colour index for a pixel: mostly base, speckled with dark/light for texture. */
+function soilPixel(x: number, y: number, seed: number): number {
+  const n = noise(x, y, seed + 31);
+  if (n > 0.82) return 3; // light fleck
+  if (n < 0.22) return 2; // dark clod
+  return 1; // base
+}
+
+/** A round patch of soil over grass, leaving a ~2px green margin (for trees). */
+function soilDisc(seed: number): Sprite {
+  const cx = 8;
+  const cy = 8;
+  const r2 = 6.2 * 6.2;
+  return overlayShape(grassTile(seed), SOIL, (x, y) => {
+    const dx = x + 0.5 - cx;
+    const dy = y + 0.5 - cy;
+    return dx * dx + dy * dy <= r2 ? soilPixel(x, y, seed) : 0;
+  });
+}
+
+/** A rectangular soil bed over grass with clipped corners, leaving a green margin (for flowers). */
+function soilBed(seed: number): Sprite {
+  const x0 = 2;
+  const x1 = 13;
+  const y0 = 5;
+  const y1 = 13;
+  return overlayShape(grassTile(seed), SOIL, (x, y) => {
+    if (x < x0 || x > x1 || y < y0 || y > y1) return 0;
+    // Clip the four corners so it reads as a bed, not a hard-edged rectangle — and
+    // stays a distinctly different shape from the tree's round disc.
+    if ((x === x0 || x === x1) && (y === y0 || y === y1)) return 0;
+    return soilPixel(x, y, seed);
+  });
+}
+
 // --- Grass variants (picked per-cell for texture variety) ------------------
 const grassUnmowed: readonly Sprite[] = [grassTile(1), grassTile(2)];
 const grassMowed = mownTile();
 const path = pathTile();
 
 // --- Obstacle variants (lake / flower / tree, picked per-cell) --------------
+// A flower rising from a rectangular soil bed. Stem roots down into the bed so the
+// bloom reads as planted, not floating on grass.
 // prettier-ignore
-const flower = overlay(grassTile(3), [
+const flower = overlay(soilBed(3), [
   '................',
   '................',
   '......ppp.......',
@@ -106,19 +169,22 @@ const flower = overlay(grassTile(3), [
   '.....pPyPp......',
   '......pPp.......',
   '.......s........',
+  '......Lss.......',
+  '.......ssL......',
+  '......Lss.......',
   '.......s........',
-  '......ss........',
   '.......s........',
   '................',
   '................',
   '................',
   '................',
-  '................',
-  '................',
-], { p: '#e88fb0', P: '#d76fa0', y: '#f2d64b', s: '#4c8236' });
+], { p: '#e88fb0', P: '#d76fa0', y: '#f2d64b', s: '#3f6f28', L: '#4c8236' });
 
+// A tree: leafy green canopy on a trunk, standing on a round soil disc. The disc
+// shows as a brown ring around and below the canopy, so the tile can't be mistaken
+// for plain grass. Trunk is a dark bark brown so it reads against the lighter soil.
 // prettier-ignore
-const tree = overlay(grassTile(4), [
+const tree = overlay(soilDisc(4), [
   '................',
   '......mmmm......',
   '.....mMMMMm.....',
@@ -135,7 +201,7 @@ const tree = overlay(grassTile(4), [
   '................',
   '................',
   '................',
-], { m: '#4c8236', M: '#356024', t: '#6b4a2a' });
+], { m: '#4c8236', M: '#356024', t: '#4a3218' });
 
 // Water/tree/flower are exposed as named sets so the renderer can map a cell's
 // decor (lawnmower.md §3) to the right art, rather than picking blindly by hash.
