@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { gardenSprites } from '../../../src/render/gardenSprites.ts';
+import { gardenSprites, WATER_EDGE } from '../../../src/render/gardenSprites.ts';
 import type { Sprite } from '../../../src/render/sprite.ts';
 
 // Trees and flowers were hard to tell apart from mowable grass — green on green.
@@ -27,6 +27,12 @@ function isSoil(hex: string): boolean {
 function isGreen(hex: string): boolean {
   const { r, g, b } = rgb(hex);
   return g > r && g > b;
+}
+
+/** Blue water: blue is the dominant channel. */
+function isWater(hex: string): boolean {
+  const { r, g, b } = rgb(hex);
+  return b > r && b > g;
 }
 
 /** Pixel keys (y*16+x) painted with a soil colour. */
@@ -86,5 +92,59 @@ describe('tree/flower soil (distinguishable from mowable grass)', () => {
     // back in, so soil reaches the near-edge columns for the flower but not the tree.
     expect(flowerSoil.has(key(2, 12))).toBe(true);
     expect(treeSoil.has(key(2, 12))).toBe(false);
+  });
+});
+
+// A body of water shouldn't be a hard blue square: each tile banks onto the lawn on
+// any side that isn't itself water, so edges and corners get a green shoreline margin.
+// The 16 tiles are indexed by a WATER_EDGE mask of which neighbours are water.
+describe('water edge/corner tiles (shoreline margins)', () => {
+  const water = gardenSprites.water;
+  const mid = TILE / 2;
+  const edgeMid = {
+    N: [mid, 0] as const,
+    S: [mid, TILE - 1] as const,
+    W: [0, mid] as const,
+    E: [TILE - 1, mid] as const,
+  };
+  const at = (s: Sprite, [x, y]: readonly [number, number]): string => colorAt(s, x, y);
+
+  it('provides all 16 neighbour combinations', () => {
+    expect(water).toHaveLength(16);
+  });
+
+  it('the fully-surrounded tile (mask 15) is all water — no margin on any side', () => {
+    const full = water[15];
+    for (const side of Object.values(edgeMid)) {
+      expect(isWater(at(full, side))).toBe(true);
+    }
+    expect(isWater(colorAt(full, mid, mid))).toBe(true); // and water in the middle
+  });
+
+  it('an isolated tile (mask 0) has a grass margin on every side, water in the centre', () => {
+    const lone = water[0];
+    for (const side of Object.values(edgeMid)) {
+      expect(isGreen(at(lone, side))).toBe(true);
+    }
+    expect(isWater(colorAt(lone, mid, mid))).toBe(true);
+  });
+
+  it('banks a margin only onto land sides — the top-of-body tile is water at its base', () => {
+    // Only the S neighbour is water: this is the north bank of a body. Water meets the
+    // southern edge; the other three sides keep a grass margin.
+    const northBank = water[WATER_EDGE.S];
+    expect(isWater(at(northBank, edgeMid.S))).toBe(true);
+    expect(isGreen(at(northBank, edgeMid.N))).toBe(true);
+    expect(isGreen(at(northBank, edgeMid.E))).toBe(true);
+    expect(isGreen(at(northBank, edgeMid.W))).toBe(true);
+  });
+
+  it('a corner tile keeps water on its two water sides and grass on the other two', () => {
+    // Water to the E and S → the NW corner of a body: water fills toward the SE.
+    const nwCorner = water[WATER_EDGE.E | WATER_EDGE.S];
+    expect(isWater(at(nwCorner, edgeMid.S))).toBe(true);
+    expect(isWater(at(nwCorner, edgeMid.E))).toBe(true);
+    expect(isGreen(at(nwCorner, edgeMid.N))).toBe(true);
+    expect(isGreen(at(nwCorner, edgeMid.W))).toBe(true);
   });
 });

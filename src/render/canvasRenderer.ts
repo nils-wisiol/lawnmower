@@ -13,6 +13,7 @@ import {
 } from '../model/index.ts';
 import type { FailReason, GameState, InputDirection } from '../model/index.ts';
 import { drawSprite, variantFor, type Sprite } from './sprite.ts';
+import { WATER_EDGE } from './gardenSprites.ts';
 import type { Theme } from './theme.ts';
 
 export interface RendererOptions {
@@ -105,10 +106,27 @@ export function cellFill(theme: Theme, traits: CellTraits, mowed: boolean): stri
  * hashed obstacle pool, preserving the pre-decor look. Tree/flower variety is picked
  * per-cell so a lawn looks the same on every redraw.
  */
+/**
+ * Bitmask (WATER_EDGE) of which of `cell`'s orthogonal neighbours are also water, so
+ * the renderer can pick the water tile that banks onto the lawn on its land sides.
+ * Directions the geometry doesn't name in WATER_EDGE (e.g. a future hex grid) are
+ * simply skipped — those bodies fall back to the full interior tile.
+ */
+function waterEdgeMask(level: Level, cell: CellId): number {
+  let mask = 0;
+  for (const dir of level.topology.directions) {
+    const bit = (WATER_EDGE as Record<string, number>)[dir];
+    if (bit === undefined) continue;
+    const n = level.topology.neighbor(cell, dir);
+    if (n !== undefined && decorOf(level, n) === 'water') mask |= bit;
+  }
+  return mask;
+}
+
 function obstacleSprite(theme: Theme, level: Level, cell: CellId): Sprite | undefined {
   switch (decorOf(level, cell)) {
     case 'water':
-      return theme.sprites.water;
+      return theme.sprites.water[waterEdgeMask(level, cell)];
     case 'tree':
       return variantFor(theme.sprites.trees, cell);
     case 'flower':

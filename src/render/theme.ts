@@ -18,8 +18,12 @@ export interface ThemeSprites {
   readonly grassMowed: Sprite;
   /** Passable-but-not-mowable path (forward-compat tile). */
   readonly path: Sprite;
-  /** A body of water (lake/pond tile), drawn for the 'water' decor. */
-  readonly water: Sprite;
+  /**
+   * Water-body tiles, indexed by a WATER_EDGE bitmask of which orthogonal neighbours
+   * are also water (16 entries). The renderer picks the entry matching a water cell's
+   * neighbours so edges and corners bank onto the lawn; index 15 is the full interior.
+   */
+  readonly water: readonly Sprite[];
   /** Tree variants, picked per-cell for the 'tree' decor. */
   readonly trees: readonly Sprite[];
   /** Flower variants, picked per-cell for the 'flower' decor. */
