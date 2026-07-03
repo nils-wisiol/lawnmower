@@ -188,20 +188,101 @@ export function legalNeighbors(level: Level, state: GameState): CellId[] {
   return out;
 }
 
-/** Grid extent (in cell units) covering every cell's layout position. */
-function bounds(level: Level): { minX: number; minY: number; cols: number; rows: number } {
+/** Axis-aligned min/max of a set of points (a cell polygon's or a board's extent). */
+function extentOf(points: readonly { x: number; y: number }[]): {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+} {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const cell of level.topology.cells) {
-    const { x, y } = level.topology.layout(cell);
+  for (const { x, y } of points) {
     if (x < minX) minX = x;
     if (y < minY) minY = y;
     if (x > maxX) maxX = x;
     if (y > maxY) maxY = y;
   }
-  return { minX, minY, cols: maxX - minX + 1, rows: maxY - minY + 1 };
+  return { minX, minY, maxX, maxY };
+}
+
+/**
+ * Board extent in cell-units, measured from the actual cell *outlines* (each cell's
+ * `cellPolygon` around its centre), not just the centre points — so a hexagon's
+ * pointed sides and half-row offsets are included and the fit math is correct for
+ * offset-row packing (hexagonal.md H3). `minX`/`minY` are the top-left-most vertex
+ * (the board origin); `width`/`height` are the full outline span. For a square grid
+ * the ±½-cell polygon reproduces the old `cols`×`rows` extent exactly. Exported so
+ * the fit/packing is unit-testable without a canvas.
+ */
+export function boardExtent(level: Level): {
+  minX: number;
+  minY: number;
+  width: number;
+  height: number;
+} {
+  const centres = level.topology.cells.map((c) => level.topology.layout(c));
+  const c = extentOf(centres);
+  const p = extentOf(level.topology.cellPolygon());
+  const minX = c.minX + p.minX;
+  const minY = c.minY + p.minY;
+  const maxX = c.maxX + p.maxX;
+  const maxY = c.maxY + p.maxY;
+  return { minX, minY, width: maxX - minX, height: maxY - minY };
+}
+
+/** The board's top-left-most vertex in cell-units — the origin pixel positions map from. */
+export interface BoardOrigin {
+  readonly minX: number;
+  readonly minY: number;
+}
+
+/**
+ * A cell's centre in CSS pixels: its `layout` point mapped through the board origin and
+ * `cellSize` scale. Pure (no canvas), so the placement is unit-testable; the renderer
+ * positions sprites, markers and the mower through it.
+ */
+export function cellCenterPx(
+  level: Level,
+  cell: CellId,
+  cellSize: number,
+  origin: BoardOrigin,
+): { cx: number; cy: number } {
+  const { x, y } = level.topology.layout(cell);
+  return { cx: (x - origin.minX) * cellSize, cy: (y - origin.minY) * cellSize };
+}
+
+/**
+ * The cell under a CSS-pixel point (0,0 = the board's top-left), or undefined if the
+ * point is off the board — the inverse of `cellCenterPx`. It undoes the origin/scale to
+ * recover cell-units, then hands off to `topology.cellAt` so the point→cell test stays
+ * geometry-blind (hexagonal.md §2.6). Pure, so click/tap hit-testing is unit-testable.
+ */
+export function cellAtPx(
+  level: Level,
+  cssX: number,
+  cssY: number,
+  cellSize: number,
+  origin: BoardOrigin,
+): CellId | undefined {
+  return level.topology.cellAt({
+    x: cssX / cellSize + origin.minX,
+    y: cssY / cellSize + origin.minY,
+  });
+}
+
+/** Distance from the centre (0,0) to the nearest edge of a centred convex polygon. */
+function polygonApothem(poly: readonly { x: number; y: number }[]): number {
+  let min = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const dist = Math.abs(a.x * b.y - a.y * b.x) / Math.hypot(b.x - a.x, b.y - a.y);
+    if (dist < min) min = dist;
+  }
+  return min;
 }
 
 /**
@@ -215,6 +296,14 @@ export class CanvasRenderer {
   private readonly cellSize: number;
   private readonly gap: number;
   private readonly origin: { minX: number; minY: number };
+  /** The cell outline shared by every cell (unit-scale, centred), cached from the topology. */
+  private readonly polygon: readonly { x: number; y: number }[];
+  /** Centre-to-edge distance of `polygon` (cell-units) — the basis for the gap inset. */
+  private readonly apothem: number;
+  /** Side of the centred square a cell's sprite is drawn into (cell-units): the smaller
+   * outline dimension, so the sprite sits inside the cell (a hexagon's pointed sides
+   * keep their base fill). For a square cell this is a full 1-cell box (unchanged). */
+  private readonly spriteSide: number;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -227,12 +316,17 @@ export class CanvasRenderer {
     this.ctx = ctx;
     this.gap = options.gap ?? DEFAULT_GAP;
 
-    const { minX, minY, cols, rows } = bounds(level);
-    this.origin = { minX, minY };
-    this.cellSize = fitCellSize(cols, options);
+    this.polygon = level.topology.cellPolygon();
+    this.apothem = polygonApothem(this.polygon);
+    const poly = extentOf(this.polygon);
+    this.spriteSide = Math.min(poly.maxX - poly.minX, poly.maxY - poly.minY);
 
-    const cssWidth = cols * this.cellSize;
-    const cssHeight = rows * this.cellSize;
+    const extent = boardExtent(level);
+    this.origin = { minX: extent.minX, minY: extent.minY };
+    this.cellSize = fitCellSize(extent.width, options);
+
+    const cssWidth = extent.width * this.cellSize;
+    const cssHeight = extent.height * this.cellSize;
     const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio ?? 1) : 1;
     canvas.width = Math.round(cssWidth * dpr);
     canvas.height = Math.round(cssHeight * dpr);
@@ -243,29 +337,43 @@ export class CanvasRenderer {
     ctx.imageSmoothingEnabled = false;
   }
 
-  /** Top-left CSS-pixel corner of a cell's drawing box. */
-  private cellOrigin(cell: CellId): { px: number; py: number } {
-    const { x, y } = this.level.topology.layout(cell);
-    return {
-      px: (x - this.origin.minX) * this.cellSize,
-      py: (y - this.origin.minY) * this.cellSize,
-    };
+  /** A cell's centre in CSS pixels (its `layout` point mapped through origin + scale). */
+  private cellCenter(cell: CellId): { cx: number; cy: number } {
+    return cellCenterPx(this.level, cell, this.cellSize, this.origin);
+  }
+
+  /**
+   * Trace the cell's outline (from `topology.cellPolygon`) as a canvas path in CSS
+   * pixels, its vertices scaled toward the centre by `shrink` (1 = the full cell).
+   * The renderer paths squares or hexagons through this one helper, geometry-blind.
+   */
+  private tracePolygon(cell: CellId, shrink: number): void {
+    const { ctx, cellSize, polygon } = this;
+    const { cx, cy } = this.cellCenter(cell);
+    ctx.beginPath();
+    for (let i = 0; i < polygon.length; i++) {
+      const px = cx + polygon[i].x * shrink * cellSize;
+      const py = cy + polygon[i].y * shrink * cellSize;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  /** Shrink factor that insets a cell's outline by `gap` CSS pixels on every edge. */
+  private get fillShrink(): number {
+    return Math.max(0, 1 - this.gap / (this.apothem * this.cellSize));
   }
 
   /**
    * The cell under a CSS-pixel point (0,0 = the canvas's top-left), or undefined if
-   * the point is off the board — the inverse of `cellOrigin`, delegating the actual
+   * the point is off the board — the inverse of `cellCenter`, delegating the actual
    * point→cell test to `topology.cellAt` so it stays geometry-blind (hexagonal.md
-   * §2.6). This is what turns a click/tap position into a move target.
-   *
-   * `cellOrigin` anchors a cell's layout point at the *top-left* of its cellSize box,
-   * whereas `topology.cellAt` treats the layout point as the cell *centre* — so we
-   * shift the point to the box centre (−½ a cell) before inverting the scale/origin.
+   * §2.6). This is what turns a click/tap position into a move target: invert the
+   * origin/scale back into cell-units, then let the topology round to its own cell.
    */
   cellAtPixel(cssX: number, cssY: number): CellId | undefined {
-    const x = (cssX - this.cellSize / 2) / this.cellSize + this.origin.minX;
-    const y = (cssY - this.cellSize / 2) / this.cellSize + this.origin.minY;
-    return this.level.topology.cellAt({ x, y });
+    return cellAtPx(this.level, cssX, cssY, this.cellSize, this.origin);
   }
 
   /**
@@ -274,26 +382,28 @@ export class CanvasRenderer {
    * `anim` the board draws statically, exactly as before.
    */
   render(state: GameState, hud?: RenderHud, anim?: RenderAnim): void {
-    const { ctx, cellSize, gap, theme, level } = this;
+    const { ctx, theme, level } = this;
 
     ctx.fillStyle = theme.background;
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
     // Cells: base fill then pixel-art sprite. The freshly-mown cell (if any) pops.
     for (const cell of level.topology.cells) {
-      const { px, py } = this.cellOrigin(cell);
       const traits = traitsOf(level, cell);
       const mowed = state.mowed.has(cell);
+
+      // Fill the cell outline, inset by `gap` so the board reads as tiled cells.
       ctx.fillStyle = cellFill(theme, traits, mowed);
-      ctx.fillRect(px + gap, py + gap, cellSize - gap * 2, cellSize - gap * 2);
+      this.tracePolygon(cell, this.fillShrink);
+      ctx.fill();
 
       const sprite = spriteForCell(theme, level, cell, mowed);
       if (sprite) {
         const popT = anim?.pop?.cell === cell ? anim.pop.t : undefined;
         if (popT === undefined) {
-          drawSprite(ctx, sprite, px, py, cellSize);
+          this.drawCellSprite(cell, sprite);
         } else {
-          this.drawPop(sprite, px, py, popT);
+          this.drawPop(cell, sprite, popT);
         }
       }
     }
@@ -323,17 +433,34 @@ export class CanvasRenderer {
     }
   }
 
+  /** Draw a sprite into the centred `spriteSide` box at a pixel centre (see spriteSide). */
+  private drawSpriteAt(sprite: Sprite, cx: number, cy: number, scale = 1): void {
+    const side = this.spriteSide * this.cellSize * scale;
+    drawSprite(this.ctx, sprite, cx - side / 2, cy - side / 2, side);
+  }
+
+  /** Draw a cell's sprite, clipped to the cell outline so it sits inside the shape. */
+  private drawCellSprite(cell: CellId, sprite: Sprite): void {
+    const { ctx } = this;
+    const { cx, cy } = this.cellCenter(cell);
+    ctx.save();
+    this.tracePolygon(cell, 1);
+    ctx.clip();
+    this.drawSpriteAt(sprite, cx, cy);
+    ctx.restore();
+  }
+
   /** Draw a just-mown cell's sprite scaled up with a fading flash (the "cut" pop). */
-  private drawPop(sprite: Sprite, px: number, py: number, t: number): void {
-    const { ctx, cellSize } = this;
+  private drawPop(cell: CellId, sprite: Sprite, t: number): void {
+    const { ctx } = this;
+    const { cx, cy } = this.cellCenter(cell);
     const grow = 0.18 * (1 - t); // up to +18% at the instant of the cut
-    const size = cellSize * (1 + grow);
-    const off = (cellSize - size) / 2;
-    drawSprite(ctx, sprite, px + off, py + off, size);
+    this.drawSpriteAt(sprite, cx, cy, 1 + grow);
     ctx.save();
     ctx.globalAlpha = 0.45 * (1 - t);
     ctx.fillStyle = this.theme.mowerAccent;
-    ctx.fillRect(px, py, cellSize, cellSize);
+    this.tracePolygon(cell, 1);
+    ctx.fill();
     ctx.restore();
   }
 
@@ -344,9 +471,7 @@ export class CanvasRenderer {
     ctx.globalAlpha = 0.28;
     ctx.fillStyle = theme.affordance;
     for (const cell of cells) {
-      const { px, py } = this.cellOrigin(cell);
-      const cx = px + cellSize / 2;
-      const cy = py + cellSize / 2;
+      const { cx, cy } = this.cellCenter(cell);
       ctx.beginPath();
       ctx.arc(cx, cy, cellSize * 0.12, 0, Math.PI * 2);
       ctx.fill();
@@ -356,9 +481,7 @@ export class CanvasRenderer {
 
   private drawStartMarker(cell: CellId): void {
     const { ctx, cellSize } = this;
-    const { px, py } = this.cellOrigin(cell);
-    const cx = px + cellSize / 2;
-    const cy = py + cellSize / 2;
+    const { cx, cy } = this.cellCenter(cell);
     ctx.strokeStyle = this.theme.startMarker;
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -367,35 +490,35 @@ export class CanvasRenderer {
   }
 
   private drawRevisitHighlight(cell: CellId): void {
-    const { ctx, cellSize, gap } = this;
-    const { px, py } = this.cellOrigin(cell);
+    const { ctx } = this;
     ctx.strokeStyle = this.theme.revisitHighlight;
     ctx.lineWidth = 4;
-    ctx.strokeRect(px + gap, py + gap, cellSize - gap * 2, cellSize - gap * 2);
+    this.tracePolygon(cell, this.fillShrink);
+    ctx.stroke();
   }
 
   /**
    * Draw the mower's directional pixel-art sprite. Mid-slide (anim.mower present)
-   * it is interpolated between the two cells and faces its heading; at rest it sits
-   * on its logical cell facing its last heading (default right).
+   * it is interpolated between the two cells' centres and faces its heading; at rest
+   * it sits on its logical cell facing its last heading (default right).
    */
   private drawMower(state: GameState, anim?: RenderAnim): void {
-    const { ctx, cellSize, theme } = this;
+    const { theme } = this;
     const slide = anim?.mower;
     const facing = slide?.facing ?? anim?.facing ?? DEFAULT_FACING;
 
-    let px: number;
-    let py: number;
+    let cx: number;
+    let cy: number;
     if (slide) {
-      const a = this.cellOrigin(slide.from);
-      const b = this.cellOrigin(slide.to);
-      px = a.px + (b.px - a.px) * slide.t;
-      py = a.py + (b.py - a.py) * slide.t;
+      const a = this.cellCenter(slide.from);
+      const b = this.cellCenter(slide.to);
+      cx = a.cx + (b.cx - a.cx) * slide.t;
+      cy = a.cy + (b.cy - a.cy) * slide.t;
     } else {
-      ({ px, py } = this.cellOrigin(state.position));
+      ({ cx, cy } = this.cellCenter(state.position));
     }
 
-    drawSprite(ctx, theme.sprites.mower[facing], px, py, cellSize);
+    this.drawSpriteAt(theme.sprites.mower[facing], cx, cy);
   }
 
   /** Top-left clock readout: elapsed time, plus the limit and a danger tint if timed. */

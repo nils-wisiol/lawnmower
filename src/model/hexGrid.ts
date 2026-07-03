@@ -141,4 +141,19 @@ export class HexGrid implements Topology {
     const { q, r } = hexRound(fq, fr);
     return this.inBounds(q, r) ? hexCellId(q, r) : undefined;
   }
+
+  cellPolygon(): readonly CellPoint[] {
+    // A flat-top hexagon of circumradius 1 centred on the layout point: two corners on
+    // the horizontal axis (±1, 0) and four at ±½ column / ±√3⁄2 row. These match the
+    // 1.5-column / √3-row layout spacing exactly, so neighbouring hexes share edges.
+    const h = SQRT3 / 2;
+    return [
+      { x: 1, y: 0 },
+      { x: 0.5, y: h },
+      { x: -0.5, y: h },
+      { x: -1, y: 0 },
+      { x: -0.5, y: -h },
+      { x: 0.5, y: -h },
+    ];
+  }
 }

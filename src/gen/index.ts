@@ -11,6 +11,7 @@ export {
 } from './generator.ts';
 export {
   GENERATOR_VERSION,
+  SHAPE_TAGGED_VERSION,
   encodeShortForm,
   decodeShortForm,
   levelFromShortForm,

@@ -78,4 +78,18 @@ describe('HexGrid topology', () => {
     expect(grid.cellAt({ x: -100, y: -100 })).toBeUndefined();
     expect(grid.cellAt({ x: 1000, y: 1000 })).toBeUndefined();
   });
+
+  it('outlines a flat-top hexagon of circumradius 1 (a flat top edge, pointed sides)', () => {
+    const poly = new HexGrid(2, 2).cellPolygon();
+    expect(poly).toHaveLength(6);
+    const h = Math.sqrt(3) / 2;
+    // Two vertices on the horizontal axis (the pointed left/right), four at ±½/±√3⁄2.
+    expect(poly).toContainEqual({ x: 1, y: 0 });
+    expect(poly).toContainEqual({ x: -1, y: 0 });
+    expect(poly).toContainEqual({ x: 0.5, y: h });
+    // Adjacent hexes must share edges: the column step (1.5) equals the distance
+    // between a cell centre and its neighbour's, so the outline tiles the layout.
+    const maxX = Math.max(...poly.map((p) => p.x));
+    expect(maxX).toBe(1);
+  });
 });

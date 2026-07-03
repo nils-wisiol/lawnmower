@@ -91,4 +91,15 @@ export class SquareGrid implements Topology {
     const y = Math.round(p.y);
     return this.inBounds(x, y) ? cellId(x, y) : undefined;
   }
+
+  cellPolygon(): readonly CellPoint[] {
+    // A unit square centred on the layout point: corners ±½ a cell on each axis, so
+    // adjacent integer-spaced cells tile edge-to-edge.
+    return [
+      { x: -0.5, y: -0.5 },
+      { x: 0.5, y: -0.5 },
+      { x: 0.5, y: 0.5 },
+      { x: -0.5, y: 0.5 },
+    ];
+  }
 }

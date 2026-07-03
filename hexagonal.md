@@ -253,7 +253,16 @@ In [src/render/canvasRenderer.ts](src/render/canvasRenderer.ts):
   interim if 6 mower sprites aren't ready.
   **Done when:** a human can play a generated hex level to completion in the browser
   using keys **and** click/tap (Playwright e2e mirroring
-  `tests/e2e/playthrough.spec.ts`).
+  `tests/e2e/playthrough.spec.ts`). _(Done — the renderer is now geometry-blind at the
+  cell level too: each `Topology` supplies a `cellPolygon` (unit square / flat-top
+  hexagon), and the renderer packs (`boardExtent`), fills, clips sprites, insets the
+  gap, and hit-tests from that one outline, so square output is byte-for-byte unchanged
+  while hex draws hexagons. Facing already reduces to the nearest of four cardinals from
+  the from→to delta (H2), so the mower needs no new art. To make the browser playthrough
+  possible before H5, the minimal slice of the short-form geometry tag (§2.5) landed:
+  hex encodes/decodes as the 5-part v3 `3.hex.…` code (square stays the 4-part v2 code,
+  untouched), so a hex level loads and shares by URL. The rest of H5 — the size/shape
+  control, onboarding copy, and the round-trip share e2e — remains.)_
 
 ### H4 — Hex shoreline & decor _(polish; separable)_
 
