@@ -4,6 +4,7 @@
 // separately testable — this file just connects them.
 
 import { attachKeyboard } from '../input/keyboard.ts';
+import { attachSwipe } from '../input/swipe.ts';
 import { createGame, move, type InputDirection, type Level } from '../model/index.ts';
 import type { GameState } from '../model/index.ts';
 import { CanvasRenderer, type RendererOptions } from '../render/canvasRenderer.ts';
@@ -26,11 +27,11 @@ export interface GameApp {
 function statusText(state: GameState): string {
   switch (state.status) {
     case 'won':
-      return `You won! Mowed all ${state.totalMowable} tiles. Press R to play again.`;
+      return `You won! Mowed all ${state.totalMowable} tiles. Press R or tap to play again.`;
     case 'lost':
-      return 'You re-mowed a tile — crash! Press R to retry.';
+      return 'You re-mowed a tile — crash! Press R or tap to retry.';
     default:
-      return `Mowed ${state.mowed.size} / ${state.totalMowable}. Arrow keys to mow.`;
+      return `Mowed ${state.mowed.size} / ${state.totalMowable}. Arrow keys or swipe to mow.`;
   }
 }
 
@@ -75,13 +76,24 @@ export function mountGame(
     draw();
   };
 
-  const detach = attachKeyboard(window, { onMove: doMove, onRestart: restart });
+  const detachKeyboard = attachKeyboard(window, { onMove: doMove, onRestart: restart });
+  // Swipes on the board mirror arrow keys; a tap restarts, but only from a
+  // finished level so a stray tap mid-run can't wipe out progress.
+  const detachSwipe = attachSwipe(canvas, {
+    onMove: doMove,
+    onTap: () => {
+      if (state.status !== 'playing') restart();
+    },
+  });
 
   draw();
 
   return {
     canvas,
     status: () => state.status,
-    destroy: () => detach(),
+    destroy: () => {
+      detachKeyboard();
+      detachSwipe();
+    },
   };
 }
