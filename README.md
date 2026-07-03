@@ -7,9 +7,12 @@ See [lawnmower.md](lawnmower.md) for the full design & implementation plan.
 
 ## Status
 
-**M0 — Project scaffold.** Vite + TypeScript, ESLint/Prettier, Vitest +
-Playwright, and a GitHub Pages CI deploy. The game itself lands in later
-milestones (see the roadmap in §9 of the plan).
+**M2 — Playable render + input.** A hardcoded level is playable in the browser:
+canvas rendering (through a swappable theme layer), arrow-key/WASD input, a
+visible mower, mowed trail, start marker, and win/fail states with instant
+restart (`R`). Built on the M1 pure trait-based model. The seeded generator,
+scoring/timing, persistence, and art polish land in later milestones (see the
+roadmap in §9 of the plan).
 
 ## Development
 
