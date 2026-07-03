@@ -14,7 +14,7 @@ import { CanvasRenderer, type RenderHud, type RendererOptions } from '../render/
 import { gardenTheme, type Theme } from '../render/theme.ts';
 import { createControls } from './controls.ts';
 import { levelFromCode, type CodedLevel } from './defaultLevel.ts';
-import { syncLevelHash, type HistoryLike } from './levelUrl.ts';
+import { pushLevelHash, readLevelCode, syncLevelHash, type HistoryLike } from './levelUrl.ts';
 import { GameSession } from './session.ts';
 import { browserStore, type LevelStore } from './storage.ts';
 
@@ -149,10 +149,17 @@ export function mountGame(
     container.dataset.status = session.status;
   };
 
-  /** Sync the URL hash to the current code and remember it in the seed history. */
-  const announceLevel = (): void => {
+  /**
+   * Sync the URL hash to the current code and remember it in the seed history.
+   * `push` adds a back-button entry (moving to a new level); otherwise the current
+   * entry is rewritten in place (boot / normalising).
+   */
+  const announceLevel = (push: boolean): void => {
     if (currentCode === undefined) return;
-    if (history) syncLevelHash(history, currentCode);
+    if (history) {
+      if (push) pushLevelHash(history, currentCode);
+      else syncLevelHash(history, currentCode);
+    }
     store.pushSeed(currentCode);
   };
 
@@ -179,7 +186,7 @@ export function mountGame(
     const coded = levelFromCode(code);
     currentCode = coded.code;
     session.load(coded.level);
-    announceLevel();
+    announceLevel(true);
     beginRun();
     draw();
   }
@@ -204,7 +211,22 @@ export function mountGame(
     const coded = options.nextLevel();
     currentCode = coded.code;
     session.load(coded.level);
-    announceLevel();
+    announceLevel(true);
+    beginRun();
+    draw();
+  };
+
+  // Back/Forward: the browser has already moved the URL to a level we previously
+  // pushed, so load whatever level the hash now names into the session — a fresh
+  // run of that lawn. No history write here, or we'd fight the navigation we're
+  // handling. Ignored when the hash is bare or already the level on screen.
+  const onPopState = (): void => {
+    const code = readLevelCode(typeof location !== 'undefined' ? location.hash : '');
+    if (code === undefined || code === currentCode) return;
+    const coded = levelFromCode(code);
+    currentCode = coded.code;
+    session.load(coded.level);
+    if (currentCode !== undefined) store.pushSeed(currentCode);
     beginRun();
     draw();
   };
@@ -249,7 +271,10 @@ export function mountGame(
     draw();
   };
   const hasWindow = typeof window !== 'undefined';
-  if (hasWindow) window.addEventListener('resize', onResize);
+  if (hasWindow) {
+    window.addEventListener('resize', onResize);
+    window.addEventListener('popstate', onPopState);
+  }
 
   const hasRaf = typeof requestAnimationFrame === 'function';
   let frame = 0;
@@ -264,8 +289,9 @@ export function mountGame(
   };
   if (hasRaf) frame = requestAnimationFrame(tick);
 
-  // Boot: advertise the starting level in the URL/history and draw the first frame.
-  announceLevel();
+  // Boot: normalise the URL to the starting level (replace, not push, so Back from
+  // the first lawn leaves the app) and draw the first frame.
+  announceLevel(false);
   beginRun();
   draw();
 
@@ -275,7 +301,10 @@ export function mountGame(
     destroy: () => {
       detachKeyboard();
       detachSwipe();
-      if (hasWindow) window.removeEventListener('resize', onResize);
+      if (hasWindow) {
+        window.removeEventListener('resize', onResize);
+        window.removeEventListener('popstate', onPopState);
+      }
       if (hasRaf) cancelAnimationFrame(frame);
     },
   };
