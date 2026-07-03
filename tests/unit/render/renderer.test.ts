@@ -14,8 +14,11 @@ import { WATER_EDGE } from '../../../src/render/gardenSprites.ts';
 import { generate } from '../../../src/gen/index.ts';
 import {
   createGame,
+  hexLevelFromAscii,
+  HEX_DIRECTIONS,
   levelFromAscii,
   move,
+  offsetCellId,
   type CellId,
   type Decor,
   type Level,
@@ -175,6 +178,43 @@ describe('spriteForCell (water edge tiles follow the body shape)', () => {
 
   it('the bottom of the body banks only to the north', () => {
     expect(spriteForCell(t, level, '1,2', false)).toBe(t.sprites.water[WATER_EDGE.N]);
+  });
+});
+
+// The same shoreline logic on a hex board: a water cell picks the six-edge hex tile
+// that banks onto the lawn on its land sides (hexagonal.md H4). The renderer stays
+// geometry-blind — it collects which of the cell's directions face water and asks
+// `waterSprite`, which returns a hex tile for the hex vocabulary.
+describe('spriteForCell (hex water banks along the six hex edges)', () => {
+  const t = gardenTheme;
+  // A vertical 1×3 hex water body in the middle column (offset col 1 = an N–S line),
+  // grass either side + the start. Authored with the hex ascii helper.
+  //   .#.
+  //   .#.
+  //   S#.
+  const base = hexLevelFromAscii('.#.\n.#.\nS#.');
+  const body = [offsetCellId(1, 0), offsetCellId(1, 1), offsetCellId(1, 2)];
+  const decor = new Map<CellId, Decor>(body.map((c) => [c, 'water']));
+  const level: Level = { ...base, decor };
+  const hexTile = (...waterDirs: string[]) =>
+    t.sprites.waterSprite(HEX_DIRECTIONS, new Set(waterDirs));
+
+  it('the middle of the body banks N and S (its two water neighbours), grass on the diagonals', () => {
+    expect(spriteForCell(t, level, offsetCellId(1, 1), false)).toBe(hexTile('N', 'S'));
+  });
+
+  it('the top of the body banks only to the south', () => {
+    expect(spriteForCell(t, level, offsetCellId(1, 0), false)).toBe(hexTile('S'));
+  });
+
+  it('the bottom of the body banks only to the north', () => {
+    expect(spriteForCell(t, level, offsetCellId(1, 2), false)).toBe(hexTile('N'));
+  });
+
+  it('picks a genuinely hex tile, not the square N|S tile', () => {
+    expect(spriteForCell(t, level, offsetCellId(1, 1), false)).not.toBe(
+      t.sprites.water[WATER_EDGE.N | WATER_EDGE.S],
+    );
   });
 });
 

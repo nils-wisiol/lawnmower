@@ -6,7 +6,7 @@
 // game with no renderer or logic change (§5 theming layer).
 
 import { rotateCW, sprite, type Sprite } from './sprite.ts';
-import type { Facing } from '../model/index.ts';
+import type { Direction, Facing } from '../model/index.ts';
 
 /** Every sprite is authored on a fixed 16×16 pixel grid, integer-scaled by the renderer. */
 const TILE = 16;
@@ -97,6 +97,75 @@ function waterTile(mask: number): Sprite {
     if (landS && y >= TILE - WATER_MARGIN) return 0;
     if (landW && x < WATER_MARGIN) return 0;
     if (landE && x >= TILE - WATER_MARGIN) return 0;
+    return waterPixel(x, y);
+  });
+}
+
+// --- Hex water shoreline (hexagonal.md H4) ---------------------------------
+// The square WATER_EDGE bitmask above names the four cardinals; a flat-top hex cell
+// borders water across six edges (N/S + the four diagonals), so hex water needs its
+// own 6-bit encoding and its own edge tiles. The renderer stays geometry-blind — it
+// hands `waterSprite` the topology's direction set and which of them face water, and
+// this module picks the matching encoding + tile (see `waterSprite`).
+
+/** √3 pervades flat-top hex geometry (the hexagon apothem and layout spacing). */
+const SQRT3 = Math.sqrt(3);
+
+/**
+ * Which of a flat-top hex cell's six neighbours is water, as bit flags — the hex
+ * sibling of WATER_EDGE. Keyed by the same direction names HexGrid uses (`N/S` plus
+ * the four diagonals), so the renderer can OR these up while iterating the topology's
+ * own `directions`. 64 combinations → 64 hex water tiles (`waterHex`).
+ */
+export const HEX_WATER_EDGE = { N: 1, S: 2, NE: 4, SE: 8, NW: 16, SW: 32 } as const;
+
+/**
+ * Outward unit normal of each hex edge, in the same cell-unit frame as
+ * `HexGrid.cellPolygon`. A regular flat-top hexagon of circumradius 1 has all six
+ * edges at the apothem distance √3⁄2 from the centre along these normals, so a pixel
+ * is within margin of edge `d` when its dot with the normal exceeds `apothem − margin`.
+ */
+const HEX_EDGE_NORMAL: Record<string, { x: number; y: number }> = {
+  N: { x: 0, y: -1 },
+  S: { x: 0, y: 1 },
+  NE: { x: SQRT3 / 2, y: -0.5 },
+  SE: { x: SQRT3 / 2, y: 0.5 },
+  NW: { x: -SQRT3 / 2, y: -0.5 },
+  SW: { x: -SQRT3 / 2, y: 0.5 },
+};
+
+/** Centre-to-edge distance (apothem) of the unit-circumradius flat-top hexagon. */
+const HEX_APOTHEM = SQRT3 / 2;
+
+/**
+ * Span, in cell-units, of the square box the renderer draws a hex sprite into: the
+ * hexagon's smaller extent (height = √3), so the 16×16 tile maps onto that box. Used
+ * to convert a tile pixel back to the cell-unit frame the edge normals live in.
+ */
+const HEX_SPRITE_SPAN = SQRT3;
+
+/** Grass margin on a hex tile's land edges, in cell-units — the WATER_MARGIN px equivalent. */
+const HEX_WATER_MARGIN = (WATER_MARGIN / TILE) * HEX_SPRITE_SPAN;
+
+/**
+ * One of the 64 hex water tiles, selected by a HEX_WATER_EDGE bitmask. Like `waterTile`
+ * but banked along the six edges of a flat-top hexagon: each edge *without* water gets
+ * a grass margin just inside it, so the body reads as banked shoreline once the renderer
+ * clips the tile to the hexagon outline. Mask 63 (all six neighbours water) is a full
+ * interior tile with no margin.
+ */
+function hexWaterTile(mask: number): Sprite {
+  return overlayShape(grassTile(6), WATER_COLORS, (x, y) => {
+    // Map the tile pixel centre into the cell-unit frame the edge normals use.
+    const nx = ((x + 0.5) / TILE - 0.5) * HEX_SPRITE_SPAN;
+    const ny = ((y + 0.5) / TILE - 0.5) * HEX_SPRITE_SPAN;
+    for (const dir of Object.keys(HEX_WATER_EDGE)) {
+      const isLand = (mask & (HEX_WATER_EDGE as Record<string, number>)[dir]) === 0;
+      if (!isLand) continue;
+      const n = HEX_EDGE_NORMAL[dir];
+      // Within the grass margin of this land edge → keep grass, banking the shoreline.
+      if (nx * n.x + ny * n.y > HEX_APOTHEM - HEX_WATER_MARGIN) return 0;
+    }
     return waterPixel(x, y);
   });
 }
@@ -305,8 +374,29 @@ const pineTree = overlay(soilDisc(8), [
 // `water` is indexed by a WATER_EDGE bitmask of which neighbours are water, so a
 // body's edges/corners bank onto the lawn; index 15 is the full interior tile.
 const water: readonly Sprite[] = Array.from({ length: 16 }, (_, mask) => waterTile(mask));
+// The hex sibling of `water`, indexed by a HEX_WATER_EDGE bitmask (64 combinations).
+const waterHex: readonly Sprite[] = Array.from({ length: 64 }, (_, mask) => hexWaterTile(mask));
 const trees: readonly Sprite[] = [roundTree, pineTree];
 const flowers: readonly Sprite[] = [flower, daisy, bluebell];
+
+/**
+ * Pick a water cell's shoreline tile, geometry-blind. The renderer passes the board's
+ * direction vocabulary (`topology.directions`) and which of those directions face a
+ * water neighbour; this maps that onto the matching edge encoding + tile set. A
+ * hex-only diagonal (`NE`) in the vocabulary marks a hex board — a square grid never
+ * names one — so the caller needs no knowledge of which geometry it is drawing.
+ */
+function waterSprite(directions: readonly Direction[], waterDirs: ReadonlySet<Direction>): Sprite {
+  const hex = directions.includes('NE');
+  const edge = (hex ? HEX_WATER_EDGE : WATER_EDGE) as Record<string, number>;
+  const tiles = hex ? waterHex : water;
+  let mask = 0;
+  for (const dir of waterDirs) {
+    const bit = edge[dir];
+    if (bit !== undefined) mask |= bit;
+  }
+  return tiles[mask];
+}
 
 // Fountains (lawnmower.md §3): a stone basin with a little jet and falling droplets.
 // The same structure sits in a full water tile (a fountain in a pond) or on a soil
@@ -384,6 +474,7 @@ export const gardenSprites = {
   grassMowed,
   path,
   water,
+  waterSprite,
   trees,
   flowers,
   waterFountain,

@@ -272,7 +272,17 @@ clustering in `assignDecor` (already topology-generic) yields good hex bodies.
 Add a hex authoring helper (a hex variant of [src/model/ascii.ts](src/model/ascii.ts))
 for readable hand-made hex test fixtures.
 **Done when:** generated hex lakes bank onto the lawn with correct edges; hex
-fixtures are authorable in tests. _(Shippable without this — see §2.4.)_
+fixtures are authorable in tests. _(Shippable without this — see §2.4.)_ _(Done — a
+6-bit `HEX_WATER_EDGE` + 64 flat-top hex water tiles bank a grass margin along the six
+hexagon edges, computed from the edge normals so a land edge shows shoreline just inside
+the outline. The renderer stays geometry-blind: it collects which of a cell's directions
+face water and calls the theme's new `waterSprite(directions, waterDirs)`, which routes a
+square vocabulary to the untouched 16 square tiles and a hex vocabulary to the hex set —
+so square output is byte-for-byte unchanged. `assignDecor` was already topology-generic
+(the water-fountain interior test uses `topology.directions.length`), and a generator
+test confirms it grows connected hex bodies. `hexLevelFromAscii` reads a plain
+rectangular char grid as an odd-q offset hex board for readable hand-made fixtures. The
+H4 shoreline-mask units sample the actual banked pixels on both geometries.)_
 
 ### H5 — Serialization & UX integration
 

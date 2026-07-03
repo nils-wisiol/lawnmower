@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { gardenSprites, WATER_EDGE } from '../../../src/render/gardenSprites.ts';
+import { gardenSprites, WATER_EDGE, HEX_WATER_EDGE } from '../../../src/render/gardenSprites.ts';
+import { HEX_DIRECTIONS, SQUARE_DIRECTIONS } from '../../../src/model/index.ts';
 import type { Sprite } from '../../../src/render/sprite.ts';
 
 // Trees and flowers were hard to tell apart from mowable grass — green on green.
@@ -146,5 +147,101 @@ describe('water edge/corner tiles (shoreline margins)', () => {
     expect(isWater(at(nwCorner, edgeMid.E))).toBe(true);
     expect(isGreen(at(nwCorner, edgeMid.N))).toBe(true);
     expect(isGreen(at(nwCorner, edgeMid.W))).toBe(true);
+  });
+});
+
+// A flat-top hex water body banks along six edges, not four (hexagonal.md H4). The
+// renderer asks `waterSprite` for the tile matching which of a cell's six directions
+// face water; the land edges get a green shoreline just inside the hexagon outline.
+describe('hex water edge tiles (six-edge shoreline margins)', () => {
+  // Pixels a couple rows inside each hex edge, derived from the flat-top geometry: N/S
+  // meet the top/bottom-centre, the diagonals meet the four canted sides. A land edge
+  // shows grass here; a water edge shows water. (The pointed left/right tips fall
+  // outside the sprite box and keep the base fill, so they aren't sampled.)
+  const edgeInner: Record<string, readonly [number, number]> = {
+    N: [8, 1],
+    S: [8, 14],
+    NE: [13, 4],
+    SE: [13, 11],
+    NW: [2, 4],
+    SW: [2, 11],
+  };
+  const center = [8, 8] as const;
+  const at = (s: Sprite, [x, y]: readonly [number, number]): string => colorAt(s, x, y);
+  /** The hex tile for a body where exactly `waterDirs` face water. */
+  const tile = (...waterDirs: string[]): Sprite =>
+    gardenSprites.waterSprite(HEX_DIRECTIONS, new Set(waterDirs));
+
+  it('picks a hex tile (not a square one) for a hex direction vocabulary', () => {
+    // A vertical N–S body's middle cell: banked N and S, grass on the four diagonals.
+    const midBody = tile('N', 'S');
+    expect(isWater(at(midBody, edgeInner.N))).toBe(true);
+    expect(isWater(at(midBody, edgeInner.S))).toBe(true);
+    for (const d of ['NE', 'SE', 'NW', 'SW']) {
+      expect(isGreen(at(midBody, edgeInner[d]))).toBe(true);
+    }
+  });
+
+  it('the fully-surrounded hex tile is all water — no margin on any of the six edges', () => {
+    const full = tile(...HEX_DIRECTIONS);
+    for (const d of HEX_DIRECTIONS) expect(isWater(at(full, edgeInner[d]))).toBe(true);
+    expect(isWater(colorAt(full, ...center))).toBe(true);
+  });
+
+  it('an isolated hex tile has a grass margin on every edge, water in the centre', () => {
+    const lone = tile();
+    for (const d of HEX_DIRECTIONS) expect(isGreen(at(lone, edgeInner[d]))).toBe(true);
+    expect(isWater(colorAt(lone, ...center))).toBe(true);
+  });
+
+  it('banks a margin only onto land edges — a single water neighbour opens just its edge', () => {
+    // Only the NE neighbour is water (the SW corner of a body): water meets the NE
+    // edge, every other edge keeps its grass shoreline.
+    const neEdge = tile('NE');
+    expect(isWater(at(neEdge, edgeInner.NE))).toBe(true);
+    for (const d of ['N', 'S', 'SE', 'NW', 'SW']) {
+      expect(isGreen(at(neEdge, edgeInner[d]))).toBe(true);
+    }
+  });
+
+  it('opens exactly the water edges and banks the rest (a two-diagonal corner)', () => {
+    // Water to the NE and SE → the western edge of a body opens toward the east.
+    const eastCorner = tile('NE', 'SE');
+    expect(isWater(at(eastCorner, edgeInner.NE))).toBe(true);
+    expect(isWater(at(eastCorner, edgeInner.SE))).toBe(true);
+    for (const d of ['N', 'S', 'NW', 'SW']) {
+      expect(isGreen(at(eastCorner, edgeInner[d]))).toBe(true);
+    }
+  });
+});
+
+// `waterSprite` is the one geometry-blind entry point the renderer uses: it maps the
+// board's direction vocabulary + the water-facing subset onto a square or hex tile,
+// so the renderer never branches on geometry (hexagonal.md H4).
+describe('waterSprite (geometry-blind tile selection)', () => {
+  it('routes a square vocabulary to the square tiles (same instances as `water`)', () => {
+    const dirs = SQUARE_DIRECTIONS;
+    expect(gardenSprites.waterSprite(dirs, new Set())).toBe(gardenSprites.water[0]);
+    expect(gardenSprites.waterSprite(dirs, new Set(['S']))).toBe(gardenSprites.water[WATER_EDGE.S]);
+    expect(gardenSprites.waterSprite(dirs, new Set(['N', 'S']))).toBe(
+      gardenSprites.water[WATER_EDGE.N | WATER_EDGE.S],
+    );
+  });
+
+  it('routes a hex vocabulary to a distinct hex tile set, keyed by HEX_WATER_EDGE', () => {
+    const s = gardenSprites.waterSprite(HEX_DIRECTIONS, new Set(['S']));
+    // A hex tile, not the square S-bank tile (different geometry → different instance).
+    expect(s).not.toBe(gardenSprites.water[WATER_EDGE.S]);
+    // Distinct hex masks give distinct tiles; equal masks give the same cached tile.
+    const nsA = gardenSprites.waterSprite(HEX_DIRECTIONS, new Set(['N', 'S']));
+    const nsB = gardenSprites.waterSprite(HEX_DIRECTIONS, new Set(['S', 'N']));
+    expect(nsA).toBe(nsB);
+    expect(nsA).not.toBe(s);
+    // Every direction maps to its own bit — six distinct single-edge tiles.
+    const single = HEX_DIRECTIONS.map((d) =>
+      gardenSprites.waterSprite(HEX_DIRECTIONS, new Set([d])),
+    );
+    expect(new Set(single).size).toBe(HEX_DIRECTIONS.length);
+    expect(Object.values(HEX_WATER_EDGE)).toHaveLength(HEX_DIRECTIONS.length);
   });
 });

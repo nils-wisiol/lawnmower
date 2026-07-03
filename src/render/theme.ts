@@ -8,7 +8,7 @@
 
 import { gardenSprites } from './gardenSprites.ts';
 import type { Sprite } from './sprite.ts';
-import type { Facing } from '../model/index.ts';
+import type { Direction, Facing } from '../model/index.ts';
 
 /** The pixel-art assets a theme draws over its base fills (lawnmower.md §3). */
 export interface ThemeSprites {
@@ -19,11 +19,22 @@ export interface ThemeSprites {
   /** Passable-but-not-mowable path (forward-compat tile). */
   readonly path: Sprite;
   /**
-   * Water-body tiles, indexed by a WATER_EDGE bitmask of which orthogonal neighbours
-   * are also water (16 entries). The renderer picks the entry matching a water cell's
-   * neighbours so edges and corners bank onto the lawn; index 15 is the full interior.
+   * Square water-body tiles, indexed by a WATER_EDGE bitmask of which orthogonal
+   * neighbours are also water (16 entries); index 15 is the full interior. Kept as the
+   * basin base for the fountains and the no-decor obstacle fallback; the renderer picks
+   * a water cell's tile through `waterSprite`, which also handles hex geometry.
    */
   readonly water: readonly Sprite[];
+  /**
+   * Pick a water cell's shoreline tile, geometry-blind (hexagonal.md H4). Given the
+   * board's direction vocabulary and which of those directions face a water neighbour,
+   * it returns the tile that banks onto the lawn on the land sides — square or hex,
+   * decided from the vocabulary — so the renderer never branches on geometry.
+   */
+  readonly waterSprite: (
+    directions: readonly Direction[],
+    waterDirs: ReadonlySet<Direction>,
+  ) => Sprite;
   /** Tree variants, picked per-cell for the 'tree' decor. */
   readonly trees: readonly Sprite[];
   /** Flower variants, picked per-cell for the 'flower' decor. */
