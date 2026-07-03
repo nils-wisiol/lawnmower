@@ -22,9 +22,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('choosing Hex + New lawn generates a hex level and shows the 6-way note', async ({
-  page,
-}) => {
+test('choosing Hex + New lawn generates a hex level and shows the 6-way note', async ({ page }) => {
   await page.goto('/');
   const game = page.locator('#game');
   await expect(game).toHaveAttribute('data-status', 'playing');

@@ -133,7 +133,10 @@ export function bootLevel(hash: string, size: LevelSize = DEFAULT_SIZE): CodedLe
  * the geometry the player selected in the controls; it defaults to `square`, which
  * encodes to the original tag-less code so the square path is byte-for-byte unchanged.
  */
-export function randomLevel(size: LevelSize = DEFAULT_SIZE, shape: GridShape = 'square'): CodedLevel {
+export function randomLevel(
+  size: LevelSize = DEFAULT_SIZE,
+  shape: GridShape = 'square',
+): CodedLevel {
   const seed = Math.floor(Math.random() * 0xffffffff);
   const code = encodeShortForm({
     seed,
