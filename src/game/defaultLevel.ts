@@ -8,7 +8,7 @@
 import { DEMO_LEVEL_MAP } from './demoLevel.ts';
 import { readLevelCode } from './levelUrl.ts';
 import { TUTORIAL_CODE, tutorialLevel } from './tutorial.ts';
-import { encodeShortForm, levelFromShortForm } from '../gen/index.ts';
+import { encodeShortForm, levelFromShortForm, type GridShape } from '../gen/index.ts';
 import { levelFromAscii, type Level } from '../model/index.ts';
 
 /** Fixed seed for the deterministic default boot level (today's daily lawn). */
@@ -129,15 +129,18 @@ export function bootLevel(hash: string, size: LevelSize = DEFAULT_SIZE): CodedLe
 /**
  * A fresh random level for the "next lawn" flow (M4): a new seed each call, so
  * consecutive wins hand out new solvable-by-construction levels — each carrying its
- * code so the URL can advertise it for sharing.
+ * code so the URL can advertise it for sharing. `shape` (hexagonal.md §2.5/H5) picks
+ * the geometry the player selected in the controls; it defaults to `square`, which
+ * encodes to the original tag-less code so the square path is byte-for-byte unchanged.
  */
-export function randomLevel(size: LevelSize = DEFAULT_SIZE): CodedLevel {
+export function randomLevel(size: LevelSize = DEFAULT_SIZE, shape: GridShape = 'square'): CodedLevel {
   const seed = Math.floor(Math.random() * 0xffffffff);
   const code = encodeShortForm({
     seed,
     width: size.width,
     height: size.height,
     coverage: NEXT_LEVEL_COVERAGE,
+    shape,
   });
   return levelFromCode(code);
 }

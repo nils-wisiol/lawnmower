@@ -33,7 +33,7 @@ export function bootstrap(container: HTMLElement): void {
   }
 
   mountGame(container, initial, {
-    nextLevel: () => randomLevel(size),
+    nextLevel: (shape) => randomLevel(size, shape),
     store,
     coach: TUTORIAL_COACH_CONFIG,
   });

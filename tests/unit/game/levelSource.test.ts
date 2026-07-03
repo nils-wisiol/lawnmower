@@ -8,7 +8,11 @@ import {
   levelFromCode,
   randomLevel,
 } from '../../../src/game/defaultLevel.ts';
-import { GENERATOR_VERSION, levelFromShortForm } from '../../../src/gen/index.ts';
+import {
+  GENERATOR_VERSION,
+  SHAPE_TAGGED_VERSION,
+  levelFromShortForm,
+} from '../../../src/gen/index.ts';
 import { TUTORIAL_CODE } from '../../../src/game/tutorial.ts';
 import { countMowable } from '../../../src/model/index.ts';
 
@@ -91,5 +95,22 @@ describe('defaultCodedLevel & randomLevel', () => {
     const again = levelFromCode(coded.code!);
     expect(again.level.topology.cells.length).toBe(coded.level.topology.cells.length);
     expect(countMowable(again.level)).toBe(countMowable(coded.level));
+  });
+
+  it('defaults to a square lawn with a tag-less v2 code (square path unchanged)', () => {
+    const coded = randomLevel();
+    expect(coded.code).toMatch(new RegExp(`^${GENERATOR_VERSION}\\.\\d+\\.\\d+x\\d+\\.\\d+$`));
+    // Square keeps the four cardinal neighbours; no hex diagonal intents.
+    expect(coded.level.topology.directions).toHaveLength(4);
+  });
+
+  it('generates a hex lawn (6 directions) with a v3 shape-tagged code when asked (H5)', () => {
+    const coded = randomLevel(undefined, 'hex');
+    expect(coded.code).toMatch(
+      new RegExp(`^${SHAPE_TAGGED_VERSION}\\.hex\\.\\d+\\.\\d+x\\d+\\.\\d+$`),
+    );
+    expect(coded.level.topology.directions).toHaveLength(6);
+    // The advertised code re-expands to the same hex geometry (shareable round-trip).
+    expect(levelFromCode(coded.code!).level.topology.directions).toHaveLength(6);
   });
 });

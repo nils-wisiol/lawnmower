@@ -293,7 +293,20 @@ round-trips a hex level; expose a hex option in the level/size controls
 ([src/game/controls.ts](src/game/controls.ts)); tutorial/onboarding note for the
 6-way controls ([src/game/tutorial.ts](src/game/tutorial.ts)).
 **Done when:** a shared hex code reproduces the exact level after reload, and an
-e2e test loads + plays a hex level end to end.
+e2e test loads + plays a hex level end to end. _(Done — the short-form geometry tag +
+round-trip landed in H3 and stays untouched here: rather than bump `GENERATOR_VERSION`
+(which would have changed every square code), the tag is a separate `SHAPE_TAGGED_VERSION`
+= 3 so square codes keep their tag-less v2 form byte-for-byte while hex is the 5-part
+`3.hex.…` form. This slice adds the UX: `randomLevel(size, shape)` and the app's
+`nextLevel(shape)` thread a geometry choice through, a Square/Hex picker in the controls
+drives what "New lawn" generates, and the controls reflect the loaded level's geometry
+(read geometry-blind from whether the topology maps the diagonal intents) so a shared hex
+link flips the picker and surfaces `HEX_CONTROLS_HINT`, the 6-way onboarding note. URL-hash
+sharing was already code-agnostic, so a hex code round-trips through the hash and reproduces
+the exact level on reload. Tests: `randomLevel` hex-code/geometry units, and an e2e that
+opts a new lawn into hex (asserting the `3.hex.…` hash + the note) and reloads a shared hex
+link to the identical board — alongside H3's hex playthrough that plays a hex level to a win
+end to end.)_
 
 ---
 
