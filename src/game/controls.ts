@@ -9,6 +9,8 @@ import { formatTime } from '../model/index.ts';
 export interface ControlsCallbacks {
   /** Load a level from a pasted/typed code (already trimmed, non-empty). */
   onLoadCode(code: string): void;
+  /** Move on to a fresh lawn — the on-screen (tap) equivalent of the N key. */
+  onNext(): void;
   /** The URL to copy when Share is pressed (carries the current level's code). */
   shareUrl(): string;
 }
@@ -36,6 +38,14 @@ async function copyToClipboard(text: string): Promise<boolean> {
 export function createControls(callbacks: ControlsCallbacks): Controls {
   const element = document.createElement('div');
   element.className = 'controls';
+
+  // Tap target for "next lawn": on a phone there is no N key, so this is the
+  // primary way to skip to / continue with a fresh lawn.
+  const nextButton = document.createElement('button');
+  nextButton.type = 'button';
+  nextButton.className = 'new-lawn';
+  nextButton.textContent = 'New lawn';
+  nextButton.addEventListener('click', () => callbacks.onNext());
 
   const form = document.createElement('form');
   form.className = 'seed-form';
@@ -71,7 +81,7 @@ export function createControls(callbacks: ControlsCallbacks): Controls {
   const best = document.createElement('p');
   best.className = 'best-time';
 
-  element.append(form, best);
+  element.append(nextButton, form, best);
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
