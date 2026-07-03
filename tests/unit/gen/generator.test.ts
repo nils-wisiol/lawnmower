@@ -291,6 +291,11 @@ describe('generate — time limit', () => {
     const { level } = generate(BASE);
     expect(levelConfig(level).timerStart).toBe('firstMove');
   });
+
+  it('doubles the per-move budget to 1s on hex (6-way movement is less familiar)', () => {
+    const { level, walk } = generate({ ...BASE, shape: 'hex' });
+    expect(levelConfig(level).timeLimitMs).toBe((walk.length - 1) * 1000);
+  });
 });
 
 describe('generate — validation', () => {
