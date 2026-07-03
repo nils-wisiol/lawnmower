@@ -60,7 +60,7 @@ async function swipe(page: import('@playwright/test').Page, dx: number, dy: numb
 test('plays the generated default level to a win with swipes', async ({ page }) => {
   const inputs = walkToInputs(level, walk);
 
-  await page.goto('/');
+  await page.goto(`/#${DEFAULT_LEVEL_CODE}`);
   const game = page.locator('#game');
   await expect(game).toHaveAttribute('data-status', 'playing');
 
@@ -77,7 +77,7 @@ test('a tap restarts after a crash', async ({ page }) => {
   const inputs = walkToInputs(level, walk);
   const first = inputs[0];
 
-  await page.goto('/');
+  await page.goto(`/#${DEFAULT_LEVEL_CODE}`);
   const game = page.locator('#game');
 
   // Swipe onto the first walk cell, then reverse straight back onto the mowed

@@ -1,7 +1,11 @@
 import { expect, test } from '@playwright/test';
 
 import { decodeShortForm, generate } from '../../src/gen/index.ts';
-import { DEFAULT_LEVEL_CODE } from '../../src/game/defaultLevel.ts';
+import {
+  DEFAULT_LEVEL_CODE,
+  defaultCodedLevel,
+  fitLevelSize,
+} from '../../src/game/defaultLevel.ts';
 import type { InputDirection } from '../../src/model/index.ts';
 import { walkToInputs } from '../helpers/solve.ts';
 
@@ -15,24 +19,37 @@ const ARROW: Record<InputDirection, string> = {
 // The default level's generator walk proves it solvable; we replay it to win.
 const { level, walk } = generate(decodeShortForm(DEFAULT_LEVEL_CODE));
 
+// The no-hash boot level is sized to the viewport (its dimensions follow the
+// screen), so its code isn't the fixed DEFAULT_LEVEL_CODE. Derive the expected
+// code from the page's own viewport, exactly as the app does, so the assertion
+// holds regardless of the browser's window size.
+async function bootCode(page: import('@playwright/test').Page): Promise<string> {
+  const vp = await page.evaluate(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }));
+  return defaultCodedLevel(fitLevelSize(vp)).code!;
+}
+
 test('boot puts the current level code in the URL hash (shareable)', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#game')).toHaveAttribute('data-status', 'playing');
   // The URL now names the exact level on screen — copying it shares that level.
-  await expect.poll(() => new URL(page.url()).hash).toBe(`#${DEFAULT_LEVEL_CODE}`);
+  await expect.poll(() => new URL(page.url()).hash).toBe(`#${await bootCode(page)}`);
 });
 
 test('N skips mid-play to a fresh lawn and updates the URL', async ({ page }) => {
   await page.goto('/');
   const game = page.locator('#game');
   await expect(game).toHaveAttribute('data-status', 'playing');
-  await expect.poll(() => new URL(page.url()).hash).toBe(`#${DEFAULT_LEVEL_CODE}`);
+  const boot = `#${await bootCode(page)}`;
+  await expect.poll(() => new URL(page.url()).hash).toBe(boot);
 
   // Without winning, N should hand out a new lawn (not sit idle) and the shareable
   // URL should follow it to the new level's code.
   await page.keyboard.press('n');
   await expect(game).toHaveAttribute('data-status', 'playing');
-  await expect.poll(() => new URL(page.url()).hash).not.toBe(`#${DEFAULT_LEVEL_CODE}`);
+  await expect.poll(() => new URL(page.url()).hash).not.toBe(boot);
   await expect.poll(() => new URL(page.url()).hash).toMatch(/^#\d+\.\d+\.\d+x\d+\.\d+$/);
 });
 
