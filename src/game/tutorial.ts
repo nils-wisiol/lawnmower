@@ -11,7 +11,7 @@ import type { CodedLevel } from './defaultLevel.ts';
 
 /**
  * Reserved level code for the tutorial. A plain word that cannot collide with a
- * short-form code (`1.<seed>.WxH.NN`), so the boot/decode path can recognise it
+ * short-form code (`<ver>.<seed>.WxH.NN`), so the boot/decode path can recognise it
  * before attempting generator decoding.
  */
 export const TUTORIAL_CODE = 'tutorial';

@@ -42,6 +42,19 @@ export interface CellPoint {
 }
 
 /**
+ * A purely-visual sub-kind for an obstacle cell (lawnmower.md §3). Deliberately NOT
+ * a CellTraits field: gameplay treats every obstacle identically (all impassable +
+ * non-mowable), so this never touches movement, the win condition, or the revisit
+ * fail. It exists only so distinct-looking obstacles can be drawn from level *data*
+ * rather than a render-time hash — which is what lets the generator cluster water
+ * into connected bodies and lets the renderer pick the right water-edge tile.
+ */
+export type Decor =
+  | 'water' // part of a lake/pond body
+  | 'tree' // a tree on a grassy patch
+  | 'flower'; // a flower on a grassy patch
+
+/**
  * The central abstraction (lawnmower.md §5): cells, adjacency, a direction set,
  * cell→pixel layout, and input mapping. Square grid and hex grid are two
  * implementations of this one interface.
@@ -103,6 +116,12 @@ export interface Level {
   readonly start: CellId;
   /** Optional scoring/timing config; see levelConfig() for the resolved value. */
   readonly config?: LevelConfig;
+  /**
+   * Optional purely-visual decoration for obstacle cells (which look like water vs
+   * a tree vs a flower). Absent for hand-authored/ascii levels — the renderer then
+   * falls back to a deterministic per-cell pick. Never consulted by game logic.
+   */
+  readonly decor?: ReadonlyMap<CellId, Decor>;
 }
 
 /** Resolve a level's timing config, filling in defaults for an absent one. */
@@ -117,6 +136,11 @@ export function traitsOf(level: Level, cell: CellId): CellTraits {
     throw new Error(`Level has no traits for cell "${cell}"`);
   }
   return t;
+}
+
+/** Look up a cell's visual decoration, or undefined if the level assigns none. */
+export function decorOf(level: Level, cell: CellId): Decor | undefined {
+  return level.decor?.get(cell);
 }
 
 /** Count the cells that count toward the objective (the mowable ones). */

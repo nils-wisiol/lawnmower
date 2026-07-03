@@ -7,7 +7,14 @@ import {
   spriteForCell,
 } from '../../../src/render/canvasRenderer.ts';
 import { gardenTheme } from '../../../src/render/theme.ts';
-import { createGame, levelFromAscii, move } from '../../../src/model/index.ts';
+import {
+  createGame,
+  levelFromAscii,
+  move,
+  type CellId,
+  type Decor,
+  type Level,
+} from '../../../src/model/index.ts';
 
 // The renderer colours a cell from its *traits* + mow state (mirroring the
 // trait-based model), never a tile-name enum. This locks that mapping so a new
@@ -44,29 +51,51 @@ describe('cellFill (trait-driven colouring)', () => {
 // trait→sprite mapping and the determinism of the per-cell variety.
 describe('spriteForCell (trait-driven pixel art)', () => {
   const t = gardenTheme;
-  const cell = '2,3';
+  // '#' obstacle, 'P' path, '.'/'S' grass — one cell of each trait to probe.
+  const level = levelFromAscii('#P\n.S');
 
-  it('obstacles draw an obstacle-variant sprite', () => {
-    const s = spriteForCell(t, { passable: false, mowable: false }, false, cell);
+  it('a decor-less obstacle falls back to a hashed obstacle-pool sprite', () => {
+    const s = spriteForCell(t, level, '0,0', false);
     expect(t.sprites.obstacles).toContain(s);
   });
 
   it('passable-but-not-mowable draws the path sprite', () => {
-    expect(spriteForCell(t, { passable: true, mowable: false }, false, cell)).toBe(t.sprites.path);
+    expect(spriteForCell(t, level, '1,0', false)).toBe(t.sprites.path);
   });
 
   it('mowed vs unmowed grass draw different sprites (the visible trail)', () => {
-    const unmowed = spriteForCell(t, { passable: true, mowable: true }, false, cell);
-    const mowed = spriteForCell(t, { passable: true, mowable: true }, true, cell);
+    const unmowed = spriteForCell(t, level, '0,1', false);
+    const mowed = spriteForCell(t, level, '0,1', true);
     expect(mowed).toBe(t.sprites.grassMowed);
     expect(t.sprites.grassUnmowed).toContain(unmowed);
     expect(mowed).not.toBe(unmowed);
   });
 
   it('picks the same variant for a cell every time (no shimmer)', () => {
-    const a = spriteForCell(t, { passable: false, mowable: false }, false, cell);
-    const b = spriteForCell(t, { passable: false, mowable: false }, false, cell);
+    const a = spriteForCell(t, level, '0,0', false);
+    const b = spriteForCell(t, level, '0,0', false);
     expect(a).toBe(b);
+  });
+});
+
+// Obstacle decor (lawnmower.md §3) drives which art an obstacle draws, from level
+// data rather than a blind hash — so water, trees and flowers are placeable.
+describe('spriteForCell (decor-driven obstacles)', () => {
+  const t = gardenTheme;
+  // A top row of obstacles (each tagged with a distinct decor kind) over a grass row
+  // carrying the required start.
+  const base = levelFromAscii('###\n..S');
+  const decor = new Map<CellId, Decor>([
+    ['0,0', 'water'],
+    ['1,0', 'tree'],
+    ['2,0', 'flower'],
+  ]);
+  const level: Level = { ...base, decor };
+
+  it('draws water / tree / flower art from the cell decor', () => {
+    expect(spriteForCell(t, level, '0,0', false)).toBe(t.sprites.water);
+    expect(t.sprites.trees).toContain(spriteForCell(t, level, '1,0', false));
+    expect(t.sprites.flowers).toContain(spriteForCell(t, level, '2,0', false));
   });
 });
 

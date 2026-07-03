@@ -17,6 +17,7 @@ import {
   SquareGrid,
   type CellId,
   type CellTraits,
+  type Decor,
   type Level,
   type Topology,
 } from '../model/index.ts';
@@ -81,6 +82,80 @@ const RANDOM_STEP_PROBABILITY = 0.15;
  * limit *sourcing* is an open question (§10); this per-step scaling is the first cut.
  */
 const MS_PER_STEP = 500;
+
+/**
+ * Water-body generation (lawnmower.md §3). Real ponds are connected, not a uniform
+ * sprinkle of single tiles, so we don't decide each obstacle's kind independently.
+ * Instead we scatter a few water *seeds* among the obstacles, then grow each seed
+ * outward into adjacent obstacles over a couple of rounds — so water accretes into
+ * connected bodies. Any water cell left orphaned (no orthogonal water neighbour) is
+ * demoted back to a plant, guaranteeing every water tile belongs to a body of ≥2
+ * (which is also what makes the water-edge tiles well-defined for the renderer).
+ */
+const WATER_SEED_FRACTION = 0.22;
+const WATER_GROWTH_ROUNDS = 2;
+const WATER_GROWTH_PROBABILITY = 0.5;
+
+/** Of the non-water obstacles, the share drawn as trees; the rest are flowers. */
+const TREE_FRACTION = 0.6;
+
+/** Orthogonal neighbours of `cell` that lie within `within`. */
+function neighboursIn(topology: Topology, cell: CellId, within: ReadonlySet<CellId>): CellId[] {
+  const result: CellId[] = [];
+  for (const dir of topology.directions) {
+    const n = topology.neighbor(cell, dir);
+    if (n !== undefined && within.has(n)) result.push(n);
+  }
+  return result;
+}
+
+/**
+ * Decide each obstacle's visual kind, clustering water into connected bodies (see
+ * WATER_SEED_FRACTION). Purely cosmetic — traits are untouched — so this runs after
+ * the walk and consumes RNG only at the end, leaving the walk itself unchanged for a
+ * given seed. Iterating `obstacles` in a fixed order keeps the result deterministic.
+ */
+function assignDecor(
+  topology: Topology,
+  obstacles: readonly CellId[],
+  rng: Rng,
+): Map<CellId, Decor> {
+  const obstacleSet = new Set(obstacles);
+  const water = new Set<CellId>();
+
+  // Seed a sparse set of water tiles…
+  for (const cell of obstacles) {
+    if (rng.next() < WATER_SEED_FRACTION) water.add(cell);
+  }
+  // …then grow each seed into adjacent obstacles, so water accretes into bodies.
+  // Additions are collected per round and applied together, giving even concentric
+  // growth rather than a single pass racing along one direction.
+  for (let round = 0; round < WATER_GROWTH_ROUNDS; round++) {
+    const additions: CellId[] = [];
+    for (const cell of obstacles) {
+      if (water.has(cell)) continue;
+      if (
+        neighboursIn(topology, cell, obstacleSet).some((n) => water.has(n)) &&
+        rng.next() < WATER_GROWTH_PROBABILITY
+      ) {
+        additions.push(cell);
+      }
+    }
+    for (const cell of additions) water.add(cell);
+  }
+  // Demote orphaned water (a lone seed that never grew) so every water tile has a
+  // water neighbour — no unrealistic one-tile puddles, and edge tiles stay well-defined.
+  for (const cell of obstacles) {
+    if (water.has(cell) && !neighboursIn(topology, cell, water).length) water.delete(cell);
+  }
+
+  const decor = new Map<CellId, Decor>();
+  for (const cell of obstacles) {
+    if (water.has(cell)) decor.set(cell, 'water');
+    else decor.set(cell, rng.next() < TREE_FRACTION ? 'tree' : 'flower');
+  }
+  return decor;
+}
 
 /** Neighbours of `cell` that are neither blocked (obstacle) nor already visited. */
 function openNeighbours(
@@ -211,9 +286,16 @@ export function generate(config: GeneratorConfig): GeneratedLevel {
   // unwalked leftover alike — is an obstacle.
   const walked = new Set(bestWalk);
   const traits = new Map<CellId, CellTraits>();
+  const obstacleCells: CellId[] = [];
   for (const cell of topology.cells) {
-    traits.set(cell, walked.has(cell) ? GRASS : OBSTACLE);
+    const isGrass = walked.has(cell);
+    traits.set(cell, isGrass ? GRASS : OBSTACLE);
+    if (!isGrass) obstacleCells.push(cell);
   }
+
+  // Step 4: give each obstacle a visual kind, clustering water into connected bodies
+  // (purely cosmetic; traits above are already final and untouched here).
+  const decor = assignDecor(topology, obstacleCells, rng);
 
   // Time limit scales with the solution: the perfect mow takes bestWalk.length - 1
   // moves (the start is mowed for free), budgeted at MS_PER_STEP each.
@@ -223,6 +305,7 @@ export function generate(config: GeneratorConfig): GeneratedLevel {
     traits,
     start: bestWalk[0],
     config: { timerStart: 'firstMove', timeLimitMs: steps * MS_PER_STEP },
+    decor,
   };
   return { level, walk: bestWalk, coverage };
 }

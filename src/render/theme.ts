@@ -18,7 +18,13 @@ export interface ThemeSprites {
   readonly grassMowed: Sprite;
   /** Passable-but-not-mowable path (forward-compat tile). */
   readonly path: Sprite;
-  /** Obstacle variants (lake/flower/tree), picked per-cell from the impassable trait. */
+  /** A body of water (lake/pond tile), drawn for the 'water' decor. */
+  readonly water: Sprite;
+  /** Tree variants, picked per-cell for the 'tree' decor. */
+  readonly trees: readonly Sprite[];
+  /** Flower variants, picked per-cell for the 'flower' decor. */
+  readonly flowers: readonly Sprite[];
+  /** Fallback obstacle pool for cells with no decor (hand-authored levels), picked by hash. */
   readonly obstacles: readonly Sprite[];
   /** The mower, one sprite per heading so it faces the way it last moved. */
   readonly mower: Record<InputDirection, Sprite>;

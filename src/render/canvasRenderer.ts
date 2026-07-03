@@ -3,7 +3,14 @@
 // square grid, so a hex/teleport Topology renders through this same code. Every
 // color comes from the injected Theme; there are no palette constants here.
 
-import { formatTime, traitsOf, type CellId, type CellTraits, type Level } from '../model/index.ts';
+import {
+  decorOf,
+  formatTime,
+  traitsOf,
+  type CellId,
+  type CellTraits,
+  type Level,
+} from '../model/index.ts';
 import type { FailReason, GameState, InputDirection } from '../model/index.ts';
 import { drawSprite, variantFor, type Sprite } from './sprite.ts';
 import type { Theme } from './theme.ts';
@@ -92,20 +99,42 @@ export function cellFill(theme: Theme, traits: CellTraits, mowed: boolean): stri
 }
 
 /**
+ * Pick an obstacle cell's sprite from its decor (lawnmower.md §3): water bodies,
+ * trees, and flowers each draw their own art, chosen from level *data* rather than a
+ * blind hash. A cell with no decor (hand-authored/ascii levels) falls back to the
+ * hashed obstacle pool, preserving the pre-decor look. Tree/flower variety is picked
+ * per-cell so a lawn looks the same on every redraw.
+ */
+function obstacleSprite(theme: Theme, level: Level, cell: CellId): Sprite | undefined {
+  switch (decorOf(level, cell)) {
+    case 'water':
+      return theme.sprites.water;
+    case 'tree':
+      return variantFor(theme.sprites.trees, cell);
+    case 'flower':
+      return variantFor(theme.sprites.flowers, cell);
+    default:
+      return variantFor(theme.sprites.obstacles, cell);
+  }
+}
+
+/**
  * Pick a cell's pixel-art sprite from its traits and mow state — the sprite mirror
  * of `cellFill`, and of the trait-based model (§5): a cell is drawn by *what it is*,
- * not a tile enum, so a new trait combination sprites itself. Obstacle and unmowed-
- * grass variety is chosen deterministically per cell (`variantFor`), so a lawn looks
- * the same on every redraw. Returns undefined only if a variant list is empty (the
- * base `cellFill` colour then stands in). Exported for unit testing without a canvas.
+ * not a tile enum, so a new trait combination sprites itself. Obstacles additionally
+ * consult their decor (water/tree/flower) via `obstacleSprite`. Variety is chosen
+ * deterministically per cell so a lawn looks the same on every redraw. Returns
+ * undefined only if a variant list is empty (the base `cellFill` colour then stands
+ * in). Exported for unit testing without a canvas.
  */
 export function spriteForCell(
   theme: Theme,
-  traits: CellTraits,
-  mowed: boolean,
+  level: Level,
   cell: CellId,
+  mowed: boolean,
 ): Sprite | undefined {
-  if (!traits.passable) return variantFor(theme.sprites.obstacles, cell);
+  const traits = traitsOf(level, cell);
+  if (!traits.passable) return obstacleSprite(theme, level, cell);
   if (!traits.mowable) return theme.sprites.path;
   if (mowed) return theme.sprites.grassMowed;
   return variantFor(theme.sprites.grassUnmowed, cell);
@@ -214,7 +243,7 @@ export class CanvasRenderer {
       ctx.fillStyle = cellFill(theme, traits, mowed);
       ctx.fillRect(px + gap, py + gap, cellSize - gap * 2, cellSize - gap * 2);
 
-      const sprite = spriteForCell(theme, traits, mowed, cell);
+      const sprite = spriteForCell(theme, level, cell, mowed);
       if (sprite) {
         const popT = anim?.pop?.cell === cell ? anim.pop.t : undefined;
         if (popT === undefined) {

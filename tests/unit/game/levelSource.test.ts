@@ -8,7 +8,7 @@ import {
   levelFromCode,
   randomLevel,
 } from '../../../src/game/defaultLevel.ts';
-import { levelFromShortForm } from '../../../src/gen/index.ts';
+import { GENERATOR_VERSION, levelFromShortForm } from '../../../src/gen/index.ts';
 import { TUTORIAL_CODE } from '../../../src/game/tutorial.ts';
 import { countMowable } from '../../../src/model/index.ts';
 
@@ -36,8 +36,9 @@ describe('levelFromCode — expanding a shared code', () => {
 
 describe('bootLevel — choosing the level to boot from a hash', () => {
   it('uses the shared code when the hash carries one', () => {
-    const coded = bootLevel('#1.42.10x8.70');
-    expect(coded.code).toBe('1.42.10x8.70');
+    const code = `${GENERATOR_VERSION}.42.10x8.70`;
+    const coded = bootLevel(`#${code}`);
+    expect(coded.code).toBe(code);
   });
 
   it('boots the default level when the hash is empty', () => {
