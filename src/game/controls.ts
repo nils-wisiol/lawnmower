@@ -5,11 +5,16 @@
 // the current best time.
 
 import { formatTime } from '../model/index.ts';
+import type { GridShape } from '../gen/index.ts';
+import { HEX_CONTROLS_HINT } from './tutorial.ts';
 
 export interface ControlsCallbacks {
   /** Load a level from a pasted/typed code (already trimmed, non-empty). */
   onLoadCode(code: string): void;
-  /** Move on to a fresh lawn — the on-screen (tap) equivalent of the N key. */
+  /**
+   * Move on to a fresh lawn — the on-screen (tap) equivalent of the N key. The app
+   * reads the selected geometry via `Controls.shape()` when generating it.
+   */
   onNext(): void;
   /** The URL to copy when Share is pressed (carries the current level's code). */
   shareUrl(): string;
@@ -22,6 +27,13 @@ export interface Controls {
   setBestTime(ms: number | undefined): void;
   /** Reflect the current level's code in the input (so it reads as the shareable code). */
   setCode(code: string | undefined): void;
+  /** The geometry the player has selected for the next generated lawn (hexagonal.md H5). */
+  shape(): GridShape;
+  /**
+   * Reflect the loaded level's geometry in the shape picker (so the picker always
+   * shows what is on screen) and surface/hide the 6-way controls hint accordingly.
+   */
+  setShape(shape: GridShape): void;
 }
 
 /** Copy text to the clipboard, resolving false if no clipboard API is available. */
@@ -46,6 +58,43 @@ export function createControls(callbacks: ControlsCallbacks): Controls {
   nextButton.className = 'new-lawn';
   nextButton.textContent = 'New lawn';
   nextButton.addEventListener('click', () => callbacks.onNext());
+
+  // Geometry picker for the next generated lawn (hexagonal.md H5). Sits next to "New
+  // lawn" since it decides what that button hands out; square is the default so the
+  // familiar four-arrow game is unchanged until the player opts into hex.
+  const shapeLabel = document.createElement('label');
+  shapeLabel.className = 'shape-label';
+  shapeLabel.append('Shape');
+  const shapeSelect = document.createElement('select');
+  shapeSelect.className = 'shape-select';
+  shapeSelect.setAttribute('aria-label', 'Board shape for a new lawn');
+  for (const [value, text] of [
+    ['square', 'Square'],
+    ['hex', 'Hex'],
+  ] as const) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = text;
+    shapeSelect.append(option);
+  }
+  shapeLabel.append(shapeSelect);
+
+  const newLawnRow = document.createElement('div');
+  newLawnRow.className = 'new-lawn-row';
+  newLawnRow.append(nextButton, shapeLabel);
+
+  // The 6-way controls onboarding note (hexagonal.md §4). Shown only while a hex board
+  // is selected/loaded — square play never sees it, keeping the default uncluttered.
+  const controlsHint = document.createElement('p');
+  controlsHint.className = 'controls-hint';
+  const currentShape = (): GridShape => (shapeSelect.value === 'hex' ? 'hex' : 'square');
+  const syncShapeHint = (): void => {
+    const hex = currentShape() === 'hex';
+    controlsHint.textContent = hex ? HEX_CONTROLS_HINT : '';
+    controlsHint.hidden = !hex;
+  };
+  shapeSelect.addEventListener('change', syncShapeHint);
+  syncShapeHint();
 
   const form = document.createElement('form');
   form.className = 'seed-form';
@@ -81,7 +130,7 @@ export function createControls(callbacks: ControlsCallbacks): Controls {
   const best = document.createElement('p');
   best.className = 'best-time';
 
-  element.append(nextButton, form, best);
+  element.append(newLawnRow, controlsHint, form, best);
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -109,6 +158,13 @@ export function createControls(callbacks: ControlsCallbacks): Controls {
       // Don't clobber whatever the player is mid-typing; only reflect the loaded
       // level's code when the field isn't focused.
       if (document.activeElement !== input) input.value = code ?? '';
+    },
+    shape(): GridShape {
+      return currentShape();
+    },
+    setShape(shape: GridShape): void {
+      if (shapeSelect.value !== shape) shapeSelect.value = shape;
+      syncShapeHint();
     },
   };
 }

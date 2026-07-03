@@ -28,6 +28,17 @@ export interface CoachMessages {
   readonly lost: string;
 }
 
+/**
+ * Onboarding note for hex levels' 6-way controls (hexagonal.md §2.2/§4, H5). The
+ * controls show it while a hex board is loaded: a flat-top hex has six neighbours, so
+ * the four arrow keys can't reach them all — the diagonals get their own Q/E/Z/C keys
+ * (and swipe/tap-to-move work in six directions). Square play never surfaces it, so
+ * the four-arrow default stays uncluttered. Lives here with the rest of the onboarding
+ * copy; the controls import it.
+ */
+export const HEX_CONTROLS_HINT =
+  'Hex lawn — 6 directions: use ↑ ↓ and Q / E / Z / C, or swipe / tap a tile.';
+
 export const TUTORIAL_COACH: CoachMessages = {
   start: 'Welcome! Swipe or use the arrow keys to mow a tile of grass.',
   progress: 'Mow every tile — but never drive back over cut grass, and steer around the obstacles.',

@@ -27,6 +27,7 @@ import {
   type RendererOptions,
 } from '../render/canvasRenderer.ts';
 import { gardenTheme, type Theme } from '../render/theme.ts';
+import type { GridShape } from '../gen/index.ts';
 import { createControls } from './controls.ts';
 import { levelFromCode, type CodedLevel } from './defaultLevel.ts';
 import { pushLevelHash, readLevelCode, syncLevelHash, type HistoryLike } from './levelUrl.ts';
@@ -70,6 +71,16 @@ function supportedInputs(topology: Topology): InputDirection[] {
  * has no input intent at all) — and every geometry, since it reads only the from→to
  * vector. Diagonals round to the nearest cardinal until H3 gives the mower 6 headings.
  */
+/**
+ * Which board geometry a level is, for the controls' shape picker and 6-way hint
+ * (hexagonal.md H5). Read geometry-blind from whether the topology maps the diagonal
+ * (hex-only) intents, so it needs no per-topology tag: a flat-top hex uses the four
+ * diagonals, a square grid never does.
+ */
+function shapeOf(topology: Topology): GridShape {
+  return topology.directionForInput('upLeft') !== undefined ? 'hex' : 'square';
+}
+
 function facingForStep(topology: Topology, from: CellId, to: CellId): Facing {
   const a = topology.layout(from);
   const b = topology.layout(to);
@@ -84,8 +95,11 @@ export interface GameAppOptions {
   readonly renderer?: RendererOptions;
   /** Time source for scoring; defaults to the real system clock. Injected in tests. */
   readonly clock?: Clock;
-  /** Produce the next coded level after a win. Omitted → "next" replays the same level. */
-  readonly nextLevel?: () => CodedLevel;
+  /**
+   * Produce the next coded level after a win, for the player-selected board geometry
+   * (hexagonal.md H5). Omitted → "next" replays the same level.
+   */
+  readonly nextLevel?: (shape: GridShape) => CodedLevel;
   /** History used to sync the URL hash; defaults to window.history. Injected in tests. */
   readonly history?: HistoryLike;
   /** Persistence for best times / seed history; defaults to localStorage-backed. */
@@ -290,6 +304,9 @@ export function mountGame(
     win = { bestMs, newBest: false };
     controls.setBestTime(bestMs);
     controls.setCode(currentCode);
+    // Keep the shape picker (and its 6-way hint) reflecting the level on screen, so a
+    // shared hex link teaches its controls and a subsequent "New lawn" stays hex.
+    controls.setShape(shapeOf(session.level.topology));
   };
 
   /** Record a just-won run's time against the current level (once per run). */
@@ -328,7 +345,7 @@ export function mountGame(
       replaySame();
       return;
     }
-    const coded = options.nextLevel();
+    const coded = options.nextLevel(controls.shape());
     currentCode = coded.code;
     session.load(coded.level);
     announceLevel(true);
