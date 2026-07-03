@@ -25,13 +25,7 @@ export {
   type SquareDirection,
 } from './squareGrid.ts';
 
-export {
-  HexGrid,
-  HEX_DIRECTIONS,
-  hexCellId,
-  axial,
-  type HexDirection,
-} from './hexGrid.ts';
+export { HexGrid, HEX_DIRECTIONS, hexCellId, axial, type HexDirection } from './hexGrid.ts';
 
 export {
   createGame,

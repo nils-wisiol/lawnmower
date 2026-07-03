@@ -25,24 +25,24 @@ investment pays off here — the following need **zero changes**:
 - **Generator** ([src/gen/generator.ts](src/gen/generator.ts)) — the
   self-avoiding walk, obstacle scatter, and water clustering are all written
   against `topology.directions` / `topology.neighbor`. It only needs to be
-  *handed* a hex topology instead of constructing `new SquareGrid` itself.
+  _handed_ a hex topology instead of constructing `new SquareGrid` itself.
 - **Timing / scoring / session / storage** — geometry-agnostic already.
 - **Renderer's graph traversal** — it already asks `topology.layout(cell)` for
   positions and iterates `topology.directions`; it never assumes a square shape
-  *structurally* (though it draws square *cells* — see below).
+  _structurally_ (though it draws square _cells_ — see below).
 
 What is genuinely coupled to squares and must change:
 
-| Area | File | What's square-specific |
-|---|---|---|
-| Topology impl | (new) `src/model/hexGrid.ts` | No hex topology exists yet |
-| Input intents | [src/model/types.ts](src/model/types.ts), [src/input/keyboard.ts](src/input/keyboard.ts), [src/input/swipe.ts](src/input/swipe.ts) | `InputDirection` has only 4 values; hex needs 6 |
-| Pointer input | [src/game/app.ts](src/game/app.ts), [src/input/swipe.ts](src/input/swipe.ts) | No click/tap-to-move exists; no pixel→cell hit-test exists |
-| Cell drawing | [src/render/canvasRenderer.ts](src/render/canvasRenderer.ts) | `fillRect` cells; `bounds`/`fitCellSize` assume rectangular packing; sprites drawn into square boxes; affordance/marker/revisit geometry |
-| Shoreline | [src/render/canvasRenderer.ts](src/render/canvasRenderer.ts), [src/render/gardenSprites.ts](src/render/gardenSprites.ts) | `WATER_EDGE` bitmask is N/E/S/W (4 sides) |
-| Authoring | [src/model/ascii.ts](src/model/ascii.ts) | Square-only map parser (used heavily by tests) |
-| Serialization | [src/gen/shortForm.ts](src/gen/shortForm.ts), [src/gen/generator.ts](src/gen/generator.ts) | No geometry tag; generator hardcodes `SquareGrid` |
-| Mower facing | [src/render/sprite.ts](src/render/sprite.ts) `rotateCW` | Derives 4 facings by 90° rotation |
+| Area          | File                                                                                                                               | What's square-specific                                                                                                                   |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Topology impl | (new) `src/model/hexGrid.ts`                                                                                                       | No hex topology exists yet                                                                                                               |
+| Input intents | [src/model/types.ts](src/model/types.ts), [src/input/keyboard.ts](src/input/keyboard.ts), [src/input/swipe.ts](src/input/swipe.ts) | `InputDirection` has only 4 values; hex needs 6                                                                                          |
+| Pointer input | [src/game/app.ts](src/game/app.ts), [src/input/swipe.ts](src/input/swipe.ts)                                                       | No click/tap-to-move exists; no pixel→cell hit-test exists                                                                               |
+| Cell drawing  | [src/render/canvasRenderer.ts](src/render/canvasRenderer.ts)                                                                       | `fillRect` cells; `bounds`/`fitCellSize` assume rectangular packing; sprites drawn into square boxes; affordance/marker/revisit geometry |
+| Shoreline     | [src/render/canvasRenderer.ts](src/render/canvasRenderer.ts), [src/render/gardenSprites.ts](src/render/gardenSprites.ts)           | `WATER_EDGE` bitmask is N/E/S/W (4 sides)                                                                                                |
+| Authoring     | [src/model/ascii.ts](src/model/ascii.ts)                                                                                           | Square-only map parser (used heavily by tests)                                                                                           |
+| Serialization | [src/gen/shortForm.ts](src/gen/shortForm.ts), [src/gen/generator.ts](src/gen/generator.ts)                                         | No geometry tag; generator hardcodes `SquareGrid`                                                                                        |
+| Mower facing  | [src/render/sprite.ts](src/render/sprite.ts) `rotateCW`                                                                            | Derives 4 facings by 90° rotation                                                                                                        |
 
 **Conclusion:** not a rewrite, but it touches the entire render stack, requires a
 real input-scheme design decision, and changes the level-code format. Milestones.
@@ -54,7 +54,7 @@ real input-scheme design decision, and changes the level-code format. Milestones
 These are the decisions that shape every later milestone. Recommendations given;
 **please confirm or override during review.**
 
-### 2.1 Hex orientation — *recommend: flat-top, offset rows*
+### 2.1 Hex orientation — _recommend: flat-top, offset rows_
 
 A flat-top hex has neighbours **N, S, NE, NW, SE, SW** (no pure E/W). This keeps
 the arrow keys' vertical axis intact (Up = N, Down = S) and reads naturally as a
@@ -76,19 +76,19 @@ the union of everything any geometry needs:
 
 **Gap caught in review:** [src/input/keyboard.ts](src/input/keyboard.ts) already
 binds **W/A/S/D → up/left/down/right**, so an earlier "Q/E/A/D for hex" idea would
-have overloaded A/D. Avoided by giving the hex diagonals their *own* keys and
+have overloaded A/D. Avoided by giving the hex diagonals their _own_ keys and
 leaving A/D as the square-only left/right:
 
-| Key | Intent | Square dir | Flat-top hex dir |
-|---|---|---|---|
-| ↑ / W | up | N | N |
-| ↓ / S | down | S | S |
-| ← / A | left | W | *(unmapped)* |
-| → / D | right | E | *(unmapped)* |
-| Q | upLeft | *(unmapped)* | NW |
-| E | upRight | *(unmapped)* | NE |
-| Z | downLeft | *(unmapped)* | SW |
-| C | downRight | *(unmapped)* | SE |
+| Key   | Intent    | Square dir   | Flat-top hex dir |
+| ----- | --------- | ------------ | ---------------- |
+| ↑ / W | up        | N            | N                |
+| ↓ / S | down      | S            | S                |
+| ← / A | left      | W            | _(unmapped)_     |
+| → / D | right     | E            | _(unmapped)_     |
+| Q     | upLeft    | _(unmapped)_ | NW               |
+| E     | upRight   | _(unmapped)_ | NE               |
+| Z     | downLeft  | _(unmapped)_ | SW               |
+| C     | downRight | _(unmapped)_ | SE               |
 
 (Q/E/Z/C form the four-diagonal cluster; W/S give the vertical axis. Square play
 is byte-for-byte unchanged — it never sees the new intents.)
@@ -108,7 +108,7 @@ double as the tap targets, so the feature is self-teaching.
 This resolves `lawnmower.md` §10 "Hex + swipe input." The 4 new intent names are
 the concrete deliverable to lock in at H0.
 
-### 2.3 Coordinate system — *recommend: axial internally, offset for layout*
+### 2.3 Coordinate system — _recommend: axial internally, offset for layout_
 
 Use **axial coordinates** `(q, r)` inside `hexGrid.ts` (clean neighbour math),
 encoded into the opaque `CellId` (e.g. `"q,r"` — same opaque-string discipline as
@@ -116,7 +116,7 @@ encoded into the opaque `CellId` (e.g. `"q,r"` — same opaque-string discipline
 by half a cell, vertical spacing ×0.75 for flat-top), which the renderer already
 consumes generically via `topology.layout`.
 
-### 2.4 Shoreline fidelity — *recommend: graceful degrade first, polish in H4*
+### 2.4 Shoreline fidelity — _recommend: graceful degrade first, polish in H4_
 
 The renderer's `waterEdgeMask` already "skips directions the geometry doesn't
 name," so hex water bodies **already fall back to the interior tile** — playable
@@ -124,7 +124,7 @@ but without banked edges. Treat proper hex shorelines (a 6-bit edge mask + hex
 edge sprites) as a **separable polish milestone (H4)** so a playable hex level
 ships at H3 without blocking on new art.
 
-### 2.5 Short-form format — *bump generator version + add geometry tag*
+### 2.5 Short-form format — _bump generator version + add geometry tag_
 
 Add a geometry field so a code is self-describing, e.g.
 `3.hex.12345.10x8.70` (version.shape.seed.WxH.coverage%). Bump
@@ -132,17 +132,18 @@ Add a geometry field so a code is self-describing, e.g.
 `square`** (locked in review), so existing v2 square codes in shared links / seed
 history keep working. Two constraints make this safe under the "detect, don't
 silently reskin" policy, and H5 must honour both:
+
 - **The square generation path must not change** in this work — hex is added as a
-  *new* topology, leaving the square walk/scatter/decor untouched, so a tag-less v2
+  _new_ topology, leaving the square walk/scatter/decor untouched, so a tag-less v2
   code still expands to the identical level under v3.
 - **The decoder accepts v2 (implicit square) and v3 (explicit `square`/`hex`) only.**
-  A tag-less code is treated as square; an unknown *shape*, or any other version,
+  A tag-less code is treated as square; an unknown _shape_, or any other version,
   still **fails loudly** — the tag keeps detecting real mismatches.
 
 **Note:** any history/best-time UI decoding stored codes must handle a genuinely
 unrecognised/malformed code gracefully (skip it) rather than throw (§4).
 
-### 2.6 Pointer input & hit-testing *(new capability for click/tap-to-move)*
+### 2.6 Pointer input & hit-testing _(new capability for click/tap-to-move)_
 
 Click/tap-to-move (§2.2) needs the **inverse of `layout`** — a pixel → cell lookup
 — which does not exist anywhere today. Design, geometry-clean:
@@ -150,7 +151,7 @@ Click/tap-to-move (§2.2) needs the **inverse of `layout`** — a pixel → cell
 - **Topology gains `cellAt(point: CellPoint): CellId | undefined`** — the inverse of
   `layout`, in cell-units. Square: floor/round to the grid. Hex: point-in-hex via
   axial rounding. Implemented per topology, so hit-testing needs no geometry
-  knowledge in the app. (Bonus: this also enables click-to-move on the *square*
+  knowledge in the app. (Bonus: this also enables click-to-move on the _square_
   board.)
 - **Renderer exposes `cellAtPixel(cssX, cssY)`** — it owns `cellSize`, `origin`, and
   the devicePixelRatio transform, so it converts an event's CSS-pixel position into
@@ -161,14 +162,14 @@ Click/tap-to-move (§2.2) needs the **inverse of `layout`** — a pixel → cell
   not an intent, so this is cleaner than reverse-mapping to a direction. Square play
   keeps using `move(input)`; both share the core.
 - **Mower facing from the positional delta.** `drawMower` currently derives facing
-  from the *input intent*. For a tap-move there is no intent, and hex has 6 headings.
+  from the _input intent_. For a tap-move there is no intent, and hex has 6 headings.
   Unify: compute facing from the `from → to` layout vector (angle → nearest heading),
   which works for every modality and every geometry. This also simplifies H3's hex
   mower facing.
 
 **Tap-vs-restart reconciliation (gap caught in review).** Today a mid-play tap does
-*nothing* on purpose — [app.ts](src/game/app.ts) comments "a stray tap mid-run can't
-wipe out progress"; tap only restarts/advances on a *finished* lawn. Tap-to-move
+_nothing_ on purpose — [app.ts](src/game/app.ts) comments "a stray tap mid-run can't
+wipe out progress"; tap only restarts/advances on a _finished_ lawn. Tap-to-move
 must preserve that safety. New tap policy:
 
 1. **Playing** + tap on a **legal-neighbour cell** → move there.
@@ -183,18 +184,20 @@ callback), and a new desktop `click`/pointer handler doing the same hit-test.
 
 ## 3. Milestones
 
-Each milestone is independently testable. H1 (topology) makes hex *logically*
+Each milestone is independently testable. H1 (topology) makes hex _logically_
 playable in tests immediately, because the core and generator are already
 abstract — the visible payoff lands at H3.
 
-### H0 — Decisions & spec *(small, gating)*
+### H0 — Decisions & spec _(small, gating)_
+
 Lock §2: orientation, the 8-name intent superset + key scheme, swipe sectors,
 click/tap-to-move policy (§2.2/§2.6), axial encoding, short-form geometry tag +
 version bump policy, and the shoreline degrade-then-polish call. Update
 `lawnmower.md` §10 to mark "Hex + swipe input" resolved and record the chosen
-scheme. **Done when:** this doc's §2 is confirmed. *(Done — locked in review.)*
+scheme. **Done when:** this doc's §2 is confirmed. _(Done — locked in review.)_
 
-### H1 — Hex topology + hit-test/moveTo *(pure logic)*
+### H1 — Hex topology + hit-test/moveTo _(pure logic)_
+
 New `src/model/hexGrid.ts` implementing `Topology`: axial cells over a rectangular
 region, 6 `directions`, `neighbor`, `directionForInput` (mapping the new intents),
 and fractional `layout`. Add **`cellAt` (inverse of `layout`, §2.6) to the
@@ -203,15 +206,16 @@ and fractional `layout`. Add **`cellAt` (inverse of `layout`, §2.6) to the
 shared "enter target cell" body from `move`. Add a `shape` parameter to
 `GeneratorConfig` and have `generate()` build the requested topology instead of
 hardcoding `SquareGrid`. Export the new pieces from `src/model/index.ts`.
-**Done when:** unit tests drive a hardcoded hex level to a win *and* a fail through
+**Done when:** unit tests drive a hardcoded hex level to a win _and_ a fail through
 the **unchanged** core; `cellAt`↔`layout` round-trip is tested for both geometries;
 `moveTo` accepts a neighbour and rejects a non-neighbour; and the generator
-produces a deterministic, solvable hex level for a fixed seed. *(Done — hex walks
+produces a deterministic, solvable hex level for a fixed seed. _(Done — hex walks
 are replayed cell-by-cell through `moveTo` rather than `tests/helpers/solve.ts`,
 whose input list is square-only; the 6-way key intents that would let `solve.ts`
-drive a hex board land in H2.)*
+drive a hex board land in H2.)_
 
 ### H2 — Input pipeline: 6-way keys, 6-sector swipe, click/tap-to-move
+
 Widen `InputDirection` in [src/model/types.ts](src/model/types.ts) to the 8-name
 superset. Update [src/input/keyboard.ts](src/input/keyboard.ts) (add Q/E/Z/C
 diagonals; leave W/A/S/D + arrows as-is) and
@@ -225,8 +229,10 @@ otherwise fall back to the existing restart/next behaviour (§2.6 policy). Confi
 tap-vs-restart branch table; a click/tap on a legal neighbour moves the mower and a
 stray mid-play tap is a no-op; **all existing square input/e2e tests still pass**.
 
-### H3 — Hex rendering *(the big visual slice)*
+### H3 — Hex rendering _(the big visual slice)_
+
 In [src/render/canvasRenderer.ts](src/render/canvasRenderer.ts):
+
 - draw hexagon cell fills (path + fill) instead of `fillRect`;
 - generalise `bounds` / `fitCellSize` for offset-row packing (fractional extents,
   correct on-screen fit for narrow phones);
@@ -238,20 +244,22 @@ In [src/render/canvasRenderer.ts](src/render/canvasRenderer.ts):
 - **facing from the `from→to` layout delta** (§2.6), giving 6 hex headings without
   overloading `rotateCW`'s 4 — a nearest-of-4 sprite fallback is an acceptable
   interim if 6 mower sprites aren't ready.
-**Done when:** a human can play a generated hex level to completion in the browser
-using keys **and** click/tap (Playwright e2e mirroring
-`tests/e2e/playthrough.spec.ts`).
+  **Done when:** a human can play a generated hex level to completion in the browser
+  using keys **and** click/tap (Playwright e2e mirroring
+  `tests/e2e/playthrough.spec.ts`).
 
-### H4 — Hex shoreline & decor *(polish; separable)*
+### H4 — Hex shoreline & decor _(polish; separable)_
+
 6-bit hex `WATER_EDGE` + hex water-edge sprites in
 [src/render/gardenSprites.ts](src/render/gardenSprites.ts); verify the water
 clustering in `assignDecor` (already topology-generic) yields good hex bodies.
 Add a hex authoring helper (a hex variant of [src/model/ascii.ts](src/model/ascii.ts))
 for readable hand-made hex test fixtures.
 **Done when:** generated hex lakes bank onto the lawn with correct edges; hex
-fixtures are authorable in tests. *(Shippable without this — see §2.4.)*
+fixtures are authorable in tests. _(Shippable without this — see §2.4.)_
 
 ### H5 — Serialization & UX integration
+
 Short-form geometry tag + `GENERATOR_VERSION` bump
 ([src/gen/shortForm.ts](src/gen/shortForm.ts)); ensure URL-hash sharing
 ([src/game/app.ts](src/game/app.ts), [src/game/levelUrl.ts](src/game/levelUrl.ts))
@@ -300,6 +308,7 @@ Remaining open points / risks:
 
 Follow the existing policy (`lawnmower.md` §8: unit + e2e, every fix ships a
 regression test):
+
 - **H1:** deterministic generator test + core win/fail on a hardcoded hex map;
   `cellAt`↔`layout` round-trip (both geometries); `moveTo` neighbour/non-neighbour.
 - **H2:** keyboard/swipe mapping units; tap-vs-restart branch table; a stray
