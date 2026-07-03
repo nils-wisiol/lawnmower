@@ -63,30 +63,17 @@ export function createGame(level: Level): GameState {
 }
 
 /**
- * Attempt one move in the given input direction. Returns the next state and an
- * outcome. Rules (lawnmower.md §2):
+ * Apply the trait rules for the mower entering `target` (already established to be a
+ * legal step from `state.position`). Shared by `move` (direction-driven) and `moveTo`
+ * (cell-driven, for click/tap-to-move, hexagonal.md §2.6) so both modalities run the
+ * exact same rules. Rules (lawnmower.md §2):
  *  - only *passable* cells may be entered (else `blocked`, no state change);
  *  - entering an unmowed *mowable* cell mows it (may `win`);
  *  - re-entering an already-mowed *mowable* cell is a hard `lost` fail;
  *  - a passable-but-not-mowable cell may be crossed freely, any number of times.
  */
-export function move(state: GameState, input: InputDirection): MoveResult {
-  if (state.status !== 'playing') {
-    return { state, outcome: 'blocked' };
-  }
-
-  const { level } = state;
-  const direction = level.topology.directionForInput(input);
-  if (direction === undefined) {
-    return { state, outcome: 'blocked' };
-  }
-
-  const target = level.topology.neighbor(state.position, direction);
-  if (target === undefined) {
-    return { state, outcome: 'blocked' }; // board edge / no neighbor
-  }
-
-  const traits = traitsOf(level, target);
+function enterCell(state: GameState, target: CellId): MoveResult {
+  const traits = traitsOf(state.level, target);
   if (!traits.passable) {
     return { state, outcome: 'blocked' }; // obstacle
   }
@@ -121,6 +108,53 @@ export function move(state: GameState, input: InputDirection): MoveResult {
     },
     outcome: won ? 'won' : 'moved',
   };
+}
+
+/**
+ * Attempt one move in the given input direction. Resolves the intent to a neighbour
+ * via the topology, then applies the shared entry rules (`enterCell`). Returns the
+ * next state and an outcome.
+ */
+export function move(state: GameState, input: InputDirection): MoveResult {
+  if (state.status !== 'playing') {
+    return { state, outcome: 'blocked' };
+  }
+
+  const { level } = state;
+  const direction = level.topology.directionForInput(input);
+  if (direction === undefined) {
+    return { state, outcome: 'blocked' };
+  }
+
+  const target = level.topology.neighbor(state.position, direction);
+  if (target === undefined) {
+    return { state, outcome: 'blocked' }; // board edge / no neighbor
+  }
+
+  return enterCell(state, target);
+}
+
+/**
+ * Attempt to move directly to `target` (click/tap-to-move, hexagonal.md §2.6). Legal
+ * only if `target` is a *current neighbour* of the mower — one step, no pathfinding,
+ * preserving the one-move-per-input rule. A tap that resolves to a non-neighbour (or
+ * the current cell) is `blocked` with no state change, so a stray tap can't wipe
+ * progress. Reaching a neighbour applies the same rules as `move` via `enterCell`.
+ */
+export function moveTo(state: GameState, target: CellId): MoveResult {
+  if (state.status !== 'playing') {
+    return { state, outcome: 'blocked' };
+  }
+
+  const { topology } = state.level;
+  const isNeighbor = topology.directions.some(
+    (dir) => topology.neighbor(state.position, dir) === target,
+  );
+  if (!isNeighbor) {
+    return { state, outcome: 'blocked' }; // not an adjacent cell
+  }
+
+  return enterCell(state, target);
 }
 
 /**

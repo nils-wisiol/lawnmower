@@ -42,6 +42,23 @@ describe('SquareGrid topology', () => {
     expect(() => new SquareGrid(0, 3)).toThrow();
     expect(() => new SquareGrid(3, -1)).toThrow();
   });
+
+  it('round-trips every cell through layout → cellAt', () => {
+    const grid = new SquareGrid(4, 3);
+    for (const cell of grid.cells) {
+      expect(grid.cellAt(grid.layout(cell))).toBe(cell);
+    }
+  });
+
+  it('hit-tests jittered points back to their cell and rejects off-board points', () => {
+    const grid = new SquareGrid(4, 3);
+    // A point just inside a cell still rounds to that cell.
+    expect(grid.cellAt({ x: 1.3, y: 2.1 })).toBe(cellId(1, 2));
+    expect(grid.cellAt({ x: -0.4, y: 0 })).toBe(cellId(0, 0));
+    // Off the board → undefined.
+    expect(grid.cellAt({ x: -1, y: 0 })).toBeUndefined();
+    expect(grid.cellAt({ x: 4, y: 0 })).toBeUndefined();
+  });
 });
 
 function grid_layout_matches(id: string): boolean {

@@ -6,6 +6,7 @@ import {
   decorOf,
   levelConfig,
   move,
+  moveTo,
   traitsOf,
   type CellId,
   type InputDirection,
@@ -51,6 +52,50 @@ describe('generate — solvable by construction (M3 done-criterion)', () => {
     const { level, walk } = generate(BASE);
     expect(level.start).toBe(walk[0]);
     expect(traitsOf(level, level.start)).toEqual({ passable: true, mowable: true });
+  });
+});
+
+// Hex is added as a *new* topology handed to the same generator; the walk/scatter/
+// decor code is geometry-agnostic, so a hex config must produce an equally solvable,
+// deterministic level. Driven cell-by-cell via moveTo (the 6-way key intents land in H2).
+describe('generate — hex geometry (H1)', () => {
+  const HEX: GeneratorConfig = { ...BASE, shape: 'hex' };
+
+  /** Replay a walk through the real rules using cell-driven moveTo (any geometry). */
+  function playWalkByCell(level: Level, walk: readonly CellId[]) {
+    let state = createGame(level);
+    for (let i = 1; i < walk.length; i++) {
+      const step = moveTo(state, walk[i]);
+      if (step.outcome === 'blocked') {
+        throw new Error(`Walk step ${i} to "${walk[i]}" was not a legal neighbour`);
+      }
+      state = step.state;
+    }
+    return state;
+  }
+
+  it('produces a solvable hex level whose generating walk is a perfect mow', () => {
+    const { level, walk } = generate(HEX);
+    expect(walk.length).toBe(countMowable(level));
+    expect(new Set(walk).size).toBe(walk.length); // no repeats
+    const final = playWalkByCell(level, walk);
+    expect(final.status).toBe('won');
+  });
+
+  it('meets the coverage floor and is reproducible per seed', () => {
+    for (const seed of [1, 2, 3, 12345, 999]) {
+      const a = generate({ ...HEX, seed });
+      const b = generate({ ...HEX, seed });
+      expect(a.coverage).toBeGreaterThanOrEqual(HEX.coverage);
+      expect(a.walk).toEqual(b.walk); // deterministic
+    }
+  });
+
+  it('is a genuinely different board from the square level for the same seed', () => {
+    const square = generate(BASE);
+    const hex = generate(HEX);
+    // Same seed, different geometry → the walks differ (guards against shape being ignored).
+    expect(hex.walk).not.toEqual(square.walk);
   });
 });
 

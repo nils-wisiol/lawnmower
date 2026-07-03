@@ -14,6 +14,7 @@
 // unchanged (lawnmower.md §5 "generator also targets the abstract graph").
 
 import {
+  HexGrid,
   SquareGrid,
   type CellId,
   type CellTraits,
@@ -22,6 +23,14 @@ import {
   type Topology,
 } from '../model/index.ts';
 import { createRng, type Rng } from './rng.ts';
+
+/**
+ * Board geometry to generate. The whole generator is written against the abstract
+ * Topology (neighbour + direction set), so this only chooses which topology to hand
+ * it — the walk/scatter/decor code is identical for both. Defaults to `square`, which
+ * leaves the original generation path byte-for-byte unchanged (hexagonal.md §2.5).
+ */
+export type GridShape = 'square' | 'hex';
 
 /** Inputs to the generator: seed picks the level, size + coverage set difficulty. */
 export interface GeneratorConfig {
@@ -37,6 +46,8 @@ export interface GeneratorConfig {
    * Hamiltonian cover (which would leave no obstacles at all).
    */
   readonly coverage: number;
+  /** Board geometry; defaults to `square` (the original, unchanged path). */
+  readonly shape?: GridShape;
 }
 
 /** A generated level plus the walk that proves it solvable (the perfect mow). */
@@ -283,7 +294,10 @@ function validate(config: GeneratorConfig): void {
  */
 export function generate(config: GeneratorConfig): GeneratedLevel {
   validate(config);
-  const topology = new SquareGrid(config.width, config.height);
+  const topology: Topology =
+    config.shape === 'hex'
+      ? new HexGrid(config.width, config.height)
+      : new SquareGrid(config.width, config.height);
   const total = topology.cells.length;
   const target = Math.ceil(config.coverage * total);
   const scatterCount = Math.round(SCATTER_DENSITY * total);
