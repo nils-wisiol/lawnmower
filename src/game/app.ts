@@ -466,6 +466,11 @@ export function mountGame(
 
   const hasRaf = typeof requestAnimationFrame === 'function';
   let frame = 0;
+  // The clock text last painted, so an idle playing frame only redraws when the
+  // visible readout actually changes. formatTime resolves to tenths, so this caps an
+  // otherwise-static board at ~10 cheap redraws/sec instead of a full raster every
+  // frame — the idle-CPU fix (the board cache makes the frames that do run cheap).
+  let lastDrawnClock = '';
   const tick = (): void => {
     // Retire a finished animation, forcing one last frame so the mower settles on
     // its cell even after a win/loss (when the clock loop below is paused).
@@ -474,12 +479,23 @@ export function mountGame(
       anim = undefined;
       settled = true;
     }
-    // Only playing runs change over time; when playing, tick may time us out, and
-    // the redraw then shows either the live clock or the just-triggered end screen.
-    // When not playing, redraw only while an animation is still running (or settling).
+    // Only playing runs change over time; when playing, tick may time us out. Redraw
+    // when there's motion (an animation running or just settled), when the timeout
+    // flipped us out of play, or when the clock's displayed value ticked over —
+    // otherwise the frame is a no-op, so an idle board doesn't burn the CPU.
     if (session.status === 'playing') {
+      const wasPlaying = session.status;
       session.tick();
-      draw();
+      const clock = formatTime(session.elapsedMs());
+      if (
+        anim !== undefined ||
+        settled ||
+        session.status !== wasPlaying ||
+        clock !== lastDrawnClock
+      ) {
+        lastDrawnClock = clock;
+        draw();
+      }
     } else if (anim !== undefined || settled) {
       draw();
     }

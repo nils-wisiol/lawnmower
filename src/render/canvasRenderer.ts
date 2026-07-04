@@ -289,7 +289,26 @@ function polygonApothem(poly: readonly { x: number; y: number }[]): number {
  * a pure function of state.
  */
 export class CanvasRenderer {
-  private readonly ctx: CanvasRenderingContext2D;
+  /** Not readonly: `renderBoard` temporarily points the shared draw helpers at the
+   * offscreen board cache, then restores this to the on-screen context. */
+  private ctx: CanvasRenderingContext2D;
+  /** Offscreen cache of the static board layer (background + cell fills + sprites),
+   * blitted every frame so the per-cell rasterisation runs only when a tile is mown. */
+  private readonly boardCanvas: HTMLCanvasElement;
+  private readonly boardCtx: CanvasRenderingContext2D;
+  /** The mown set the cache was last built for; a new reference (a fresh cut, a
+   * restart) invalidates the cache. `move` allocates a new set only when it mows, so
+   * reference identity is an exact "did the board change?" test (see game.ts). */
+  private cachedMowed: ReadonlySet<CellId> | undefined;
+  /** devicePixelRatio the canvas is scaled by; sprite rasters bake it in for crispness. */
+  private readonly dpr: number;
+  /**
+   * Each distinct sprite pre-rasterised once to an offscreen canvas at the on-screen
+   * cell resolution, so drawing a cell (or the mower each frame) is a single
+   * `drawImage` blit instead of ~256 per-pixel `fillRect`s. Sprites are shared and
+   * immutable, so one raster serves every cell that uses it and every redraw.
+   */
+  private readonly spriteCache = new Map<Sprite, HTMLCanvasElement>();
   private readonly cellSize: number;
   private readonly gap: number;
   private readonly origin: { minX: number; minY: number };
@@ -325,6 +344,7 @@ export class CanvasRenderer {
     const cssWidth = extent.width * this.cellSize;
     const cssHeight = extent.height * this.cellSize;
     const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio ?? 1) : 1;
+    this.dpr = dpr;
     canvas.width = Math.round(cssWidth * dpr);
     canvas.height = Math.round(cssHeight * dpr);
     canvas.style.width = `${cssWidth}px`;
@@ -332,6 +352,21 @@ export class CanvasRenderer {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // Crisp integer-scaled pixels for the pixel-art direction (§3).
     ctx.imageSmoothingEnabled = false;
+
+    // Offscreen twin of the on-screen canvas (same device pixels + dpr transform) that
+    // holds the rendered static board, so a frame that hasn't mown a tile — an idle
+    // clock tick, or a mid-slide mower frame — just blits it instead of re-drawing
+    // every cell's sprite. Only ever constructed in a real DOM (app + e2e); the unit
+    // tests exercise the pure helpers above, never `render`.
+    const boardCanvas = document.createElement('canvas');
+    boardCanvas.width = canvas.width;
+    boardCanvas.height = canvas.height;
+    const boardCtx = boardCanvas.getContext('2d');
+    if (!boardCtx) throw new Error('2D canvas context unavailable');
+    boardCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    boardCtx.imageSmoothingEnabled = false;
+    this.boardCanvas = boardCanvas;
+    this.boardCtx = boardCtx;
   }
 
   /** A cell's centre in CSS pixels (its `layout` point mapped through origin + scale). */
@@ -374,35 +409,70 @@ export class CanvasRenderer {
   }
 
   /**
+   * Rebuild the static board layer — background + every cell's fill and pixel-art
+   * sprite — into the offscreen cache. This holds the whole per-cell rasterisation
+   * cost, so it runs only when the mown set changes (see `render`), not once per
+   * frame. Draws through the shared helpers by temporarily aiming `this.ctx` at the
+   * cache's context, then restoring the on-screen one.
+   */
+  private renderBoard(state: GameState): void {
+    const { theme, level } = this;
+    const onscreen = this.ctx;
+    this.ctx = this.boardCtx;
+    try {
+      const { ctx } = this;
+      ctx.fillStyle = theme.background;
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+      // Cells: base fill then pixel-art sprite.
+      for (const cell of level.topology.cells) {
+        const traits = traitsOf(level, cell);
+        const mowed = state.mowed.has(cell);
+
+        // Fill the cell outline, inset by `gap` so the board reads as tiled cells.
+        ctx.fillStyle = cellFill(theme, traits, mowed);
+        this.tracePolygon(cell, this.fillShrink);
+        ctx.fill();
+
+        const sprite = spriteForCell(theme, level, cell, mowed);
+        if (sprite) this.drawCellSprite(cell, sprite);
+      }
+    } finally {
+      this.ctx = onscreen;
+    }
+  }
+
+  /**
    * Redraw the entire board for the given state, the optional timing HUD, and the
    * optional visual-only animation (mower slide, fresh-mow pop, facing). With no
    * `anim` the board draws statically, exactly as before.
+   *
+   * The static board (background + cells + sprites) comes from the offscreen cache,
+   * rebuilt only when the mown set changes; each frame blits it and paints the cheap
+   * dynamic overlays (pop, affordances, start ring, mower, HUD) on top.
    */
   render(state: GameState, hud?: RenderHud, anim?: RenderAnim): void {
-    const { ctx, theme, level } = this;
+    const { theme, level } = this;
 
-    ctx.fillStyle = theme.background;
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    if (this.cachedMowed !== state.mowed) {
+      this.renderBoard(state);
+      this.cachedMowed = state.mowed;
+    }
 
-    // Cells: base fill then pixel-art sprite. The freshly-mown cell (if any) pops.
-    for (const cell of level.topology.cells) {
-      const traits = traitsOf(level, cell);
-      const mowed = state.mowed.has(cell);
+    const { ctx } = this;
+    // Blit the cached board 1:1 in device pixels (identity transform), then paint the
+    // overlays back in CSS-pixel space under the dpr transform `restore` brings back.
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(this.boardCanvas, 0, 0);
+    ctx.restore();
 
-      // Fill the cell outline, inset by `gap` so the board reads as tiled cells.
-      ctx.fillStyle = cellFill(theme, traits, mowed);
-      this.tracePolygon(cell, this.fillShrink);
-      ctx.fill();
-
-      const sprite = spriteForCell(theme, level, cell, mowed);
-      if (sprite) {
-        const popT = anim?.pop?.cell === cell ? anim.pop.t : undefined;
-        if (popT === undefined) {
-          this.drawCellSprite(cell, sprite);
-        } else {
-          this.drawPop(cell, sprite, popT);
-        }
-      }
+    // The freshly-mown cell (if any) pops: its sprite swells and flashes over the
+    // cached tile, at the same z-order it had when drawn inline among the cells.
+    if (anim?.pop) {
+      const { cell, t } = anim.pop;
+      const sprite = spriteForCell(theme, level, cell, state.mowed.has(cell));
+      if (sprite) this.drawPop(cell, sprite, t);
     }
 
     // Faint hints on the cells the mower can legally step to (move affordance +
@@ -430,10 +500,42 @@ export class CanvasRenderer {
     }
   }
 
-  /** Draw a sprite into the centred `spriteSide` box at a pixel centre (see spriteSide). */
+  /**
+   * The sprite pre-rasterised to a device-resolution offscreen canvas sized to the
+   * `spriteSide` cell box, cached by sprite identity. Built lazily the first time a
+   * sprite is drawn; reused for every cell and every frame after that.
+   */
+  private spriteImage(sprite: Sprite): HTMLCanvasElement {
+    const cached = this.spriteCache.get(sprite);
+    if (cached) return cached;
+    const px = Math.max(1, Math.round(this.spriteSide * this.cellSize * this.dpr));
+    const off = document.createElement('canvas');
+    off.width = px;
+    off.height = px;
+    const offCtx = off.getContext('2d');
+    if (!offCtx) throw new Error('2D canvas context unavailable');
+    offCtx.imageSmoothingEnabled = false;
+    // Rasterise at device resolution once; the per-pixel fillRect cost is paid here
+    // a single time per distinct sprite instead of on every cell of every redraw.
+    drawSprite(offCtx, sprite, 0, 0, px);
+    this.spriteCache.set(sprite, off);
+    return off;
+  }
+
+  /**
+   * Draw a sprite into the centred `spriteSide` box at a pixel centre (see spriteSide).
+   * At unit scale (cells, mower) it blits the cached raster — one `drawImage` instead
+   * of hundreds of `fillRect`s; a scaled draw (the fresh-mow pop) still rasterises
+   * directly, since that's a single cell for a few frames.
+   */
   private drawSpriteAt(sprite: Sprite, cx: number, cy: number, scale = 1): void {
     const side = this.spriteSide * this.cellSize * scale;
-    drawSprite(this.ctx, sprite, cx - side / 2, cy - side / 2, side);
+    if (scale === 1) {
+      // imageSmoothing is off, so the device-res raster blits crisp (nearest-neighbour).
+      this.ctx.drawImage(this.spriteImage(sprite), cx - side / 2, cy - side / 2, side, side);
+    } else {
+      drawSprite(this.ctx, sprite, cx - side / 2, cy - side / 2, side);
+    }
   }
 
   /** Draw a cell's sprite, clipped to the cell outline so it sits inside the shape. */
